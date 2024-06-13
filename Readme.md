@@ -14,7 +14,7 @@
 
 ## Updates & News
 **Github Repository still in Constuction...**
-- [14/06/2024] :page_facing_up: We release our paper on [Arxiv](http://arxiv.org/abs/2402.04788) today!
+- [xx/06/2024] :page_facing_up: We will release our paper soon!
 
 ## Contents
 - [Updates \& News](#updates--news)
