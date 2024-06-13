@@ -23,7 +23,7 @@
   - [Overview](#overview)
   - [How to use GUI-World](#how-to-use-gui-world)
 - [GUI-Vid: A GUI-Oriented VideoLLM](#gui-vid-a-gui-oriented-videollm)
-- [Contributing](#contributing)
+- [Contribution](#contribution)
 - [Acknowledgments](#acknowledgments)
 - [Citation](#citation)
 
@@ -65,7 +65,7 @@ python demo_local.py \
 --video_path '' \
 --qs '' 
 ```
-## Contributing
+## Contribution
 Contributions to this project are welcome. Please consider the following ways to contribute:
 
 - Proposing new features or improvements
