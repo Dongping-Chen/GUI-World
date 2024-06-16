@@ -1,5 +1,5 @@
 <div align="center">
-<h1><img src="Figures/Gui_icon.png" alt="Icon" width="50">GUI-World: A Dataset for GUI-Orientated Multimodal Large Language Models
+<h1><img src="Figures/Gui_icon.png" alt="Icon" width="30">GUI-World: A Dataset for GUI-Orientated Multimodal Large Language Models
 
 [![Paper](https://img.shields.io/badge/Paper-%F0%9F%8E%93-lightgrey?style=flat-square)](https://arxiv.org/abs/2402.04788) [![Dataset](https://img.shields.io/badge/Dataset-%F0%9F%92%BE-green?style=flat-square)](https://huggingface.co/datasets/shuaishuaicdp/MLLM-Judge) [![Website](https://img.shields.io/badge/Website-%F0%9F%90%BE-green?style=flat-square)](https://gui-world.github.io/)
 
