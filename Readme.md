@@ -22,7 +22,6 @@
 - [Dataset: GUI-World](#dataset-gui-world)
   - [Overview](#overview)
   - [How to use GUI-World](#how-to-use-gui-world)
-  - [How to benchmark your model](#how-to-benchmark-your-model)
 - [GUI-Vid: A GUI-Oriented VideoLLM](#gui-vid-a-gui-oriented-videollm)
 - [Contribution](#contribution)
 - [Acknowledgments](#acknowledgments)
@@ -35,9 +34,6 @@ GUI-World introduces a comprehensive benchmark for evaluating MLLMs in dynamic a
 
 ### How to use GUI-World
 GUI-World is splited to train and test set, which can be accessed from [huggingface](https://huggingface.co/datasets/shuaishuaicdp/GUI-World).
-
-### How to benchmark your model
-Coming Soon!
 
 ## GUI-Vid: A GUI-Oriented VideoLLM 
 GUI-Vid is a VideoLLM finetuned from [Videochat2](https://github.com/OpenGVLab/Ask-Anything). You can reproduce our experiment results following these instructions:
@@ -80,9 +76,11 @@ Many thanks to Yinuo Liu, Zhengyan Fu, Shilin Zhang, Yu, Tianhe Gu, Haokuan Yuan
 
 ## Citation
 ```
-@article{chen2024gui,
-      title={GUI-WORLD: A Dataset for GUI-Orientated Multimodal Large Language Models},
-      author={GUI-World Team},
-      year={2024}
-    }
+@misc{chen2024guiworld,
+      title={GUI-WORLD: A Dataset for GUI-oriented Multimodal LLM-based Agents}, 
+      author={Dongping Chen and Yue Huang and Siyuan Wu and Jingyu Tang and Liuyi Chen and Yilin Bai and Zhigang He and Chenlong Wang and Huichi Zhou and Yiqiang Li and Tianshuo Zhou and Yue Yu and Chujie Gao and Qihui Zhang and Yi Gui and Zhen Li and Yao Wan and Pan Zhou and Jianfeng Gao and Lichao Sun},
+      year={2024},
+      eprint={2406.10819},
+      archivePrefix={arXiv},
+}
 ```
