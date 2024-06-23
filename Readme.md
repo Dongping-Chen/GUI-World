@@ -1,7 +1,7 @@
 <div align="center">
 <h1>GUI-World: A Dataset for GUI-Orientated Multimodal Large Language Models
 
-[![Paper](https://img.shields.io/badge/Paper-%F0%9F%8E%93-lightgrey?style=flat-square)](https://arxiv.org/abs/2402.04788) [![Dataset](https://img.shields.io/badge/Dataset-%F0%9F%92%BE-green?style=flat-square)](https://huggingface.co/datasets/shuaishuaicdp/MLLM-Judge) [![Website](https://img.shields.io/badge/Website-%F0%9F%90%BE-green?style=flat-square)](https://gui-world.github.io/)
+[![Paper](https://img.shields.io/badge/Paper-%F0%9F%8E%93-lightgrey?style=flat-square)](https://arxiv.org/abs/2406.10819) [![Dataset](https://img.shields.io/badge/Dataset-%F0%9F%92%BE-green?style=flat-square)](https://huggingface.co/datasets/shuaishuaicdp/GUi-World) [![Website](https://img.shields.io/badge/Website-%F0%9F%90%BE-green?style=flat-square)](https://gui-world.github.io/)
 
 <img src="https://img.shields.io/github/last-commit/Dongping-Chen/GUI-World?style=flat-square&color=5D6D7E" alt="git-last-commit" /> <img src="https://img.shields.io/github/commit-activity/m/Dongping-Chen/GUI-World?style=flat-square&color=5D6D7E" alt="GitHub commit activity" /> <img src="https://img.shields.io/github/languages/top/Dongping-Chen/GUI-World?style=flat-square&color=5D6D7E" alt="GitHub top language" />
 
@@ -14,7 +14,7 @@
 
 ## Updates & News
 **Github Repository still in Constuction...**
-- [xx/06/2024] :page_facing_up: We will release our paper soon!
+- [16/06/2024] :page_facing_up: Paper on [arxiv](https://arxiv.org/abs/2406.10819) has released!
 
 ## Contents
 - [Updates \& News](#updates--news)
@@ -22,6 +22,7 @@
 - [Dataset: GUI-World](#dataset-gui-world)
   - [Overview](#overview)
   - [How to use GUI-World](#how-to-use-gui-world)
+  - [How to benchmark your model](#how-to-benchmark-your-model)
 - [GUI-Vid: A GUI-Oriented VideoLLM](#gui-vid-a-gui-oriented-videollm)
 - [Contribution](#contribution)
 - [Acknowledgments](#acknowledgments)
@@ -34,6 +35,9 @@ GUI-World introduces a comprehensive benchmark for evaluating MLLMs in dynamic a
 
 ### How to use GUI-World
 GUI-World is splited to train and test set, which can be accessed from [huggingface](https://huggingface.co/datasets/shuaishuaicdp/GUI-World).
+
+### How to benchmark your model
+Coming Soon!
 
 ## GUI-Vid: A GUI-Oriented VideoLLM 
 GUI-Vid is a VideoLLM finetuned from [Videochat2](https://github.com/OpenGVLab/Ask-Anything). You can reproduce our experiment results following these instructions:
@@ -54,16 +58,15 @@ bash scripts/videochat_vicuna/run_7b_stage3.sh
 ```
 
 **Inference with GUI-Vid**
-You can first download checkpoint from [Huggingface](https://huggingface.co/shuaishuaicdp/GUI-Vid).
+You can first download checkpoint from [Huggingface](https://huggingface.co/shuaishuaicdp/GUI-Vid). You also need to set the config according to the guidance in [Videochat2](https://github.com/OpenGVLab/Ask-Anything/tree/main/video_chat2).
 Then, move `scripts/demo_local.py` to `Ask-Anything/video_chat2`, and set the `model_path` in `scripts/demo_local.py`. Use the following script to inference a GUI video:
 
 ```shell
 python demo_local.py \
---model_path '' \
---keyframe '' \
---res <> \
---video_path '' \
---qs '' 
+--ckpt_path <path to GUI-Vid> \
+--keyframe 8 \
+--video_path <path to your video> \
+--qs <your query> 
 ```
 ## Contribution
 Contributions to this project are welcome. Please consider the following ways to contribute:
@@ -73,7 +76,7 @@ Contributions to this project are welcome. Please consider the following ways to
 
 
 ## Acknowledgments
-Many thanks to Yinuo Liu, Zhengyan Fu, Shilin Zhang, Yu, Tianhe Gu for their invalueble effort in this project. This project is based on methodologies and code presented in [Videochat2](https://github.com/OpenGVLab/Ask-Anything). 
+Many thanks to Yinuo Liu, Zhengyan Fu, Shilin Zhang, Yu, Tianhe Gu, Haokuan Yuan, and Junqi Wang for their invalueble effort in this project. This project is based on methodologies and code presented in [Videochat2](https://github.com/OpenGVLab/Ask-Anything).
 
 ## Citation
 ```
