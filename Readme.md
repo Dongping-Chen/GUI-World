@@ -15,7 +15,7 @@
 ## Updates & News
 
 **We will release our benchmark code soon.**
-
+- [18/10/2024] We release the benchmark code.
 - [16/06/2024] 📄 Paper on [arxiv](https://arxiv.org/abs/2406.10819) has released!
 
 ## Contents
@@ -56,11 +56,11 @@ pip install -r requirements.txt
 **GUI-Oriented Finetuning**
 
 - Download [GUI-World] and modify the root path in `GUI_Vid/configs/instruction_data.py`, which is the root dir for your download GUI-World.
-- Set `vit_blip_model_path`, `llama_model_path` and `videochat2_model_path` in `scripts/videochat_vicuna/config_7b_stage3.py`, these checkpoints can be download from [GUI-Vid](https://huggingface.co/shuaishuaicdp/GUI-Vid).
+- Set `vit_blip_model_path`, `llama_model_path` and `videochat2_model_path` in `GUI_Vid/scripts/config_7b_stage3.py`, these checkpoints can be download from [GUI-Vid](https://huggingface.co/shuaishuaicdp/GUI-Vid).
 
 ```shell
 # Vicuna
-bash scripts/videochat_vicuna/run_7b_stage3.sh
+bash GUI_Vid/scripts/run_7b_stage3.sh
 ```
 
 **Inference with GUI-Vid**
@@ -74,6 +74,10 @@ python demo_local.py \
 --video_path <path to your video> \
 --qs <your query> 
 ```
+
+### How our video identifier works?
+
+In our paper, we use five settings to extract keyframes in video. For `Human` and `Linspace` (we employed uniform sampling to select 10 frames from each video, maintaining equal intervals between frames. This is the previous `Random` setting and we now use `Linspace` replacing it to avoid confusion), you can refer to the original file of our annotation and perform it by `np.linspace`. For `Program`, we use [Katna](https://github.com/keplerlab/katna) to extract keyframes and our code is in `GUI_Vid/scripts/katna.py`. For [VIP](https://github.com/facebookresearch/vip) and [R3M](https://github.com/facebookresearch/r3m) based on [UVD](https://github.com/zcczhang/UVD), which are additional experiments in [NeurIPS Rebuttal](https://openreview.net/forum?id=h8LuywKj6N&noteId=IG1slwXfWC), we extract keyframes locally and you can download them from [this link](https://1drv.ms/u/c/32f66c0c65d8cc2b/EUkoaMigq6hAg3GQx54pEz8BG6FMgXohIfnJ1MB5H092Rw?e=p7exRF).
 
 ## Contribution
 
@@ -89,11 +93,10 @@ Many thanks to Yinuo Liu, Zhengyan Fu, Shilin Zhang, Yu, Tianhe Gu, Haokuan Yuan
 ## Citation
 
 ```
-@misc{chen2024guiworld,
-      title={GUI-WORLD: A Dataset for GUI-oriented Multimodal LLM-based Agents}, 
-      author={Dongping Chen and Yue Huang and Siyuan Wu and Jingyu Tang and Liuyi Chen and Yilin Bai and Zhigang He and Chenlong Wang and Huichi Zhou and Yiqiang Li and Tianshuo Zhou and Yue Yu and Chujie Gao and Qihui Zhang and Yi Gui and Zhen Li and Yao Wan and Pan Zhou and Jianfeng Gao and Lichao Sun},
-      year={2024},
-      eprint={2406.10819},
-      archivePrefix={arXiv},
+@article{chen2024gui,
+  title={GUI-WORLD: A Dataset for GUI-oriented Multimodal LLM-based Agents},
+  author={Chen, Dongping and Huang, Yue and Wu, Siyuan and Tang, Jingyu and Chen, Liuyi and Bai, Yilin and He, Zhigang and Wang, Chenlong and Zhou, Huichi and Li, Yiqiang and others},
+  journal={arXiv preprint arXiv:2406.10819},
+  year={2024}
 }
 ```
