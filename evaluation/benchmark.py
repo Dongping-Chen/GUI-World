@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import math
+import tempfile
 from pathlib import Path
 from typing import Callable, Sequence
 
@@ -80,10 +82,56 @@ def _resolved_video_path(record: dict, video_root: Path | None) -> Path:
     return path
 
 
-def _successful_task(value) -> bool:
+def _preflight_output(path: Path) -> None:
+    parent = path.parent
+    if not parent.exists():
+        raise BenchmarkError(
+            f"Output directory does not exist: {parent}"
+        )
+    if not parent.is_dir():
+        raise BenchmarkError(
+            f"Output parent is not a directory: {parent}"
+        )
+
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            dir=parent,
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+    except OSError as error:
+        raise BenchmarkError(
+            f"Could not create an atomic temporary output file in "
+            f"{parent}: {error}"
+        ) from error
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError as error:
+                raise BenchmarkError(
+                    f"Could not remove output preflight file "
+                    f"{temporary_path}: {error}"
+                ) from error
+
+
+def _successful_task(value, current_task: dict) -> bool:
+    result = (
+        value.get("MLLM_result")
+        if isinstance(value, dict)
+        else None
+    )
+    answer = result.get("Answer") if isinstance(result, dict) else None
     return (
         isinstance(value, dict)
-        and value.get("MLLM_result") is not None
+        and value.get("q") == current_task["q"]
+        and value.get("a") == current_task["a"]
+        and isinstance(answer, str)
+        and bool(answer.strip())
         and "error" not in value
     )
 
@@ -139,6 +187,7 @@ def run_benchmark(
             f"Output file already exists: {output_path}. Use --resume to "
             "continue it or choose a different output."
         )
+    _preflight_output(output_path)
 
     canonical_scenario_name = canonical_scenario(scenario)
     canonical_strategy_name = canonical_strategy(strategy)
@@ -177,7 +226,7 @@ def run_benchmark(
                 if isinstance(previous_tasks, dict)
                 else None
             )
-            if _successful_task(old_task):
+            if _successful_task(old_task, task):
                 task["MLLM_result"] = old_task["MLLM_result"]
                 continue
             if isinstance(old_task, dict):
@@ -250,7 +299,7 @@ def _non_negative_float(value: str) -> float:
         raise argparse.ArgumentTypeError(
             "must be a non-negative number"
         ) from error
-    if number < 0:
+    if not math.isfinite(number) or number < 0:
         raise argparse.ArgumentTypeError("must be a non-negative number")
     return number
 

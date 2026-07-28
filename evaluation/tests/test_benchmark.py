@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import copy
 import json
+import tempfile
 from pathlib import Path
 
 import cv2
@@ -287,6 +289,63 @@ def test_complete_resume_makes_no_provider_or_frame_calls(
     assert len(read_jsonl(output_path)) == 1
 
 
+@pytest.mark.parametrize(
+    "invalid_success",
+    [
+        "string-result",
+        "missing-answer",
+        "empty-answer",
+        "non-string-answer",
+        "changed-question",
+        "changed-answer",
+    ],
+)
+def test_resume_retries_results_with_invalid_schema_or_stale_task(
+    tmp_path,
+    benchmark_record,
+    invalid_success,
+):
+    from evaluation.benchmark import run_benchmark
+
+    record = _record(benchmark_record, "invalid-resume", "resume.mp4")
+    input_path = _write_jsonl(tmp_path / "input.jsonl", [record])
+    (tmp_path / "resume.mp4").touch()
+    existing = _complete_result(record)
+    task = existing["result"]["Sequential-QA"]
+    if invalid_success == "string-result":
+        task["MLLM_result"] = "old raw response"
+    elif invalid_success == "missing-answer":
+        task["MLLM_result"] = {"Description": "No answer"}
+    elif invalid_success == "empty-answer":
+        task["MLLM_result"] = {"Answer": "   "}
+    elif invalid_success == "non-string-answer":
+        task["MLLM_result"] = {"Answer": 7}
+    elif invalid_success == "changed-question":
+        task["q"] = "An outdated question"
+    else:
+        task["a"] = "An outdated reference answer"
+    output_path = _write_jsonl(tmp_path / "output.jsonl", [existing])
+    provider = FakeProvider()
+    extraction_calls = []
+
+    run_benchmark(
+        input_path,
+        output_path,
+        provider,
+        "website",
+        "linspace",
+        video_root=tmp_path,
+        resume=True,
+        frame_extractor=_fake_extractor(extraction_calls),
+    )
+
+    assert len(extraction_calls) == 1
+    assert len(provider.calls) == 1
+    result = read_jsonl(output_path)[0]["result"]
+    assert result["Sequential-QA"]["MLLM_result"] == {"Answer": "answer 0"}
+    assert result["Prediction"]["MLLM_result"] == {"Answer": "saved-1"}
+
+
 def test_start_end_select_exact_records_and_atomically_write_each_record(
     tmp_path,
     benchmark_record,
@@ -376,17 +435,129 @@ def test_run_benchmark_rejects_existing_output_without_resume(
 
     record = _record(benchmark_record, "one", "one.mp4")
     input_path = _write_jsonl(tmp_path / "input.jsonl", [record])
-    output_path = _write_jsonl(tmp_path / "output.jsonl", [])
+    output_path = tmp_path / "output.jsonl"
+    original = b'{"id": "existing"}\n'
+    output_path.write_bytes(original)
+    provider = FakeProvider()
+    extraction_calls = []
 
     with pytest.raises(BenchmarkError, match=r"already exists.*--resume"):
         run_benchmark(
             input_path,
             output_path,
-            FakeProvider(),
+            provider,
             "website",
             "linspace",
-            frame_extractor=_fake_extractor([]),
+            frame_extractor=_fake_extractor(extraction_calls),
         )
+
+    assert output_path.read_bytes() == original
+    assert extraction_calls == []
+    assert provider.calls == []
+
+
+@pytest.mark.parametrize("parent_kind", ["missing", "file"])
+def test_output_parent_preflight_fails_before_frame_or_provider_calls(
+    tmp_path,
+    benchmark_record,
+    parent_kind,
+):
+    from evaluation.benchmark import BenchmarkError, run_benchmark
+
+    record = _record(benchmark_record, "one", "one.mp4")
+    input_path = _write_jsonl(tmp_path / "input.jsonl", [record])
+    (tmp_path / "one.mp4").touch()
+    parent = tmp_path / "invalid-output-parent"
+    if parent_kind == "file":
+        parent.write_text("not a directory", encoding="utf-8")
+    output_path = parent / "output.jsonl"
+    provider = FakeProvider()
+    extraction_calls = []
+
+    with pytest.raises(BenchmarkError) as raised:
+        run_benchmark(
+            input_path,
+            output_path,
+            provider,
+            "website",
+            "linspace",
+            video_root=tmp_path,
+            frame_extractor=_fake_extractor(extraction_calls),
+        )
+
+    assert extraction_calls == []
+    assert provider.calls == []
+    assert str(parent) in str(raised.value)
+    if parent_kind == "missing":
+        assert not parent.exists()
+
+
+def test_output_preflight_temp_creation_failure_precedes_paid_calls(
+    tmp_path,
+    benchmark_record,
+    monkeypatch,
+):
+    from evaluation.benchmark import BenchmarkError, run_benchmark
+
+    record = _record(benchmark_record, "one", "one.mp4")
+    input_path = _write_jsonl(tmp_path / "input.jsonl", [record])
+    (tmp_path / "one.mp4").touch()
+    provider = FakeProvider()
+    extraction_calls = []
+
+    def deny_temp_file(*args, **kwargs):
+        raise PermissionError("simulated unwritable directory")
+
+    monkeypatch.setattr(
+        tempfile,
+        "NamedTemporaryFile",
+        deny_temp_file,
+    )
+
+    with pytest.raises(
+        BenchmarkError,
+        match="simulated unwritable directory",
+    ):
+        run_benchmark(
+            input_path,
+            tmp_path / "output.jsonl",
+            provider,
+            "website",
+            "linspace",
+            video_root=tmp_path,
+            frame_extractor=_fake_extractor(extraction_calls),
+        )
+
+    assert extraction_calls == []
+    assert provider.calls == []
+    assert not (tmp_path / "output.jsonl").exists()
+
+
+def test_output_preflight_probe_leaves_no_file_before_extraction(
+    tmp_path,
+    benchmark_record,
+):
+    from evaluation.benchmark import run_benchmark
+
+    record = _record(benchmark_record, "one", "one.mp4")
+    input_path = _write_jsonl(tmp_path / "input.jsonl", [record])
+    (tmp_path / "one.mp4").touch()
+
+    def inspect_directory(video_path, strategy, keyframes=()):
+        assert not list(tmp_path.glob(".output.jsonl.*.tmp"))
+        return ["frame"]
+
+    run_benchmark(
+        input_path,
+        tmp_path / "output.jsonl",
+        FakeProvider(),
+        "website",
+        "linspace",
+        video_root=tmp_path,
+        frame_extractor=inspect_directory,
+    )
+
+    assert not list(tmp_path.glob(".output.jsonl.*.tmp"))
 
 
 def test_run_benchmark_rejects_same_input_and_output_even_in_resume_mode(
@@ -667,6 +838,17 @@ def test_cli_help_documents_workflow_options(capsys):
         "--base-delay",
     ):
         assert option in help_text
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["nan", "NaN", "inf", "+inf", "-inf", "Infinity", "-Infinity"],
+)
+def test_non_negative_float_rejects_non_finite_values(value):
+    from evaluation.benchmark import _non_negative_float
+
+    with pytest.raises(argparse.ArgumentTypeError, match="non-negative"):
+        _non_negative_float(value)
 
 
 def test_cli_reports_invalid_strategy_without_a_traceback(
