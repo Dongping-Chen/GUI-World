@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 
 import pytest
@@ -280,6 +281,37 @@ def test_fsync_directory_errors_warn_that_replacement_may_be_committed(
     assert closed == ([descriptor] if operation == "fsync" else [])
 
 
+def test_directory_close_warning_as_error_preserves_primary_jsonl_error(
+    tmp_path,
+    monkeypatch,
+):
+    descriptor = 59
+    monkeypatch.setattr(jsonl.os, "name", "posix")
+    monkeypatch.setattr(jsonl.os, "open", lambda path, flags: descriptor)
+
+    def fail_fsync(value):
+        raise OSError("primary directory fsync failure")
+
+    def fail_close(value):
+        raise OSError("secondary directory close failure")
+
+    monkeypatch.setattr(jsonl.os, "fsync", fail_fsync)
+    monkeypatch.setattr(jsonl.os, "close", fail_close)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        with pytest.raises(
+            JsonlError,
+            match="primary directory fsync failure",
+        ) as raised:
+            jsonl._fsync_directory(tmp_path)
+
+    assert any(
+        "secondary directory close failure" in detail
+        for detail in raised.value.cleanup_errors
+    )
+
+
 def test_atomic_write_jsonl_replace_failure_preserves_output_and_cleans_temp(
     tmp_path,
     monkeypatch,
@@ -351,6 +383,42 @@ def test_cleanup_failure_does_not_mask_keyboard_interrupt(
         with pytest.raises(KeyboardInterrupt, match="primary interrupt"):
             atomic_write_jsonl(path, interrupted_records())
 
+    assert path.read_bytes() == original
+    temporary_paths = [entry for entry in tmp_path.iterdir() if entry != path]
+    assert len(temporary_paths) == 1
+    real_unlink(temporary_paths[0])
+
+
+def test_temp_cleanup_warning_as_error_preserves_keyboard_interrupt(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "records.jsonl"
+    original = b'{"id": "old"}\n'
+    path.write_bytes(original)
+    real_unlink = Path.unlink
+
+    def interrupted_records():
+        yield {"id": "first"}
+        raise KeyboardInterrupt("primary interrupt under warning filter")
+
+    def fail_unlink(temporary_path):
+        raise OSError("secondary temp unlink failure")
+
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        with pytest.raises(
+            KeyboardInterrupt,
+            match="primary interrupt under warning filter",
+        ) as raised:
+            atomic_write_jsonl(path, interrupted_records())
+
+    assert any(
+        "secondary temp unlink failure" in detail
+        for detail in raised.value.cleanup_errors
+    )
     assert path.read_bytes() == original
     temporary_paths = [entry for entry in tmp_path.iterdir() if entry != path]
     assert len(temporary_paths) == 1

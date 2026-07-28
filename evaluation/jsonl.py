@@ -12,6 +12,30 @@ class JsonlError(RuntimeError):
     """Raised when JSONL input or output is invalid."""
 
 
+def _report_cleanup_failure(
+    primary_error: BaseException,
+    message: str,
+) -> None:
+    try:
+        cleanup_errors = getattr(primary_error, "cleanup_errors", None)
+        if cleanup_errors is None:
+            cleanup_errors = []
+            setattr(primary_error, "cleanup_errors", cleanup_errors)
+        if isinstance(cleanup_errors, list):
+            cleanup_errors.append(message)
+    except BaseException:
+        pass
+
+    try:
+        warnings.warn(
+            message,
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    except BaseException:
+        pass
+
+
 def _reject_json_constant(value: str) -> None:
     raise ValueError(f"Invalid JSON constant: {value}")
 
@@ -51,12 +75,11 @@ def _fsync_directory(directory: Path) -> None:
                 os.close(descriptor)
             except OSError as error:
                 if primary_error is not None:
-                    warnings.warn(
+                    _report_cleanup_failure(
+                        primary_error,
                         f"Directory descriptor cleanup failed ({error}) for "
                         f"{directory} while handling "
                         f"{type(primary_error).__name__}.",
-                        RuntimeWarning,
-                        stacklevel=2,
                     )
                 else:
                     raise JsonlError(
@@ -197,12 +220,11 @@ def atomic_write_jsonl(
                 pass
             except OSError as error:
                 if primary_error is not None:
-                    warnings.warn(
+                    _report_cleanup_failure(
+                        primary_error,
                         f"Temporary JSONL cleanup failed ({error}) for "
                         f"{temporary_path} while handling "
                         f"{type(primary_error).__name__}.",
-                        RuntimeWarning,
-                        stacklevel=2,
                     )
                 else:
                     raise JsonlError(
