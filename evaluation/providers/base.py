@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 import random
 import time
@@ -172,7 +173,7 @@ def retry_call(
             delay = max(backoff, retry_after or 0.0)
             random_value = min(1.0, max(0.0, float(random_function())))
             delay += delay * jitter * random_value
-            sleep_function(delay)
+            sleep_function(min(max_delay, delay))
     raise RuntimeError("Retry loop ended unexpectedly.")
 
 
@@ -250,7 +251,7 @@ def _numeric_retry_after(value) -> float | None:
         retry_after = float(value)
     except (TypeError, ValueError):
         return None
-    if retry_after < 0:
+    if not math.isfinite(retry_after) or retry_after < 0:
         return None
     return retry_after
 

@@ -4,6 +4,7 @@ import base64
 import importlib
 import io
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -551,6 +552,115 @@ def test_qwen_base_url_is_isolated_per_provider_call(monkeypatch):
     assert fake_dashscope.base_http_api_url == "https://global.example"
 
 
+def test_qwen_custom_endpoint_covers_preprocessing_and_restores(monkeypatch):
+    from evaluation.providers import create_inference_provider
+    from evaluation.providers.base import ProviderRequestError
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "qwen")],
+    )
+    monkeypatch.setenv("DASHSCOPE_BASE_URL", "https://custom.example")
+    preprocessing_endpoints = []
+
+    def call(**kwargs):
+        preprocessing_endpoints.append(fake_dashscope.base_http_api_url)
+        assert kwargs["base_address"] == "https://custom.example"
+        raise ValueError("simulated preprocessing failure")
+
+    fake_dashscope = SimpleNamespace(
+        base_http_api_url="https://global.example",
+        MultiModalConversation=SimpleNamespace(call=call),
+    )
+    monkeypatch.setitem(sys.modules, "dashscope", fake_dashscope)
+    provider = create_inference_provider("qwen", attempts=1)
+
+    with pytest.raises(
+        ProviderRequestError,
+        match="simulated preprocessing failure",
+    ):
+        provider.generate("Question", [_frame()])
+
+    assert preprocessing_endpoints == ["https://custom.example"]
+    assert fake_dashscope.base_http_api_url == "https://global.example"
+
+
+def test_qwen_serializes_two_custom_endpoints(monkeypatch):
+    from evaluation.providers import create_inference_provider
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "qwen")],
+    )
+    first_entered = threading.Event()
+    second_entered = threading.Event()
+    release_first = threading.Event()
+    observations = []
+
+    def call(**kwargs):
+        prompt = kwargs["messages"][0]["content"][-1]["text"]
+        observations.append(
+            (
+                prompt,
+                fake_dashscope.base_http_api_url,
+                kwargs["base_address"],
+            )
+        )
+        if prompt == "A":
+            first_entered.set()
+            assert release_first.wait(timeout=1)
+        else:
+            second_entered.set()
+        return {
+            "output": {
+                "choices": [
+                    {
+                        "message": {
+                            "content": [{"text": '{"Answer": "Done."}'}]
+                        }
+                    }
+                ]
+            }
+        }
+
+    fake_dashscope = SimpleNamespace(
+        base_http_api_url="https://global.example",
+        MultiModalConversation=SimpleNamespace(call=call),
+    )
+    monkeypatch.setitem(sys.modules, "dashscope", fake_dashscope)
+    monkeypatch.setenv("DASHSCOPE_BASE_URL", "https://a.example")
+    provider_a = create_inference_provider("qwen")
+    monkeypatch.setenv("DASHSCOPE_BASE_URL", "https://b.example")
+    provider_b = create_inference_provider("qwen")
+    errors = []
+
+    def generate(provider, prompt):
+        try:
+            provider.generate(prompt, [_frame()])
+        except Exception as error:
+            errors.append(error)
+
+    thread_a = threading.Thread(target=generate, args=(provider_a, "A"))
+    thread_b = threading.Thread(target=generate, args=(provider_b, "B"))
+    thread_a.start()
+    assert first_entered.wait(timeout=1)
+    thread_b.start()
+    second_was_serialized = not second_entered.wait(timeout=0.05)
+    release_first.set()
+    thread_a.join(timeout=1)
+    thread_b.join(timeout=1)
+
+    assert second_was_serialized
+    assert not errors
+    assert observations == [
+        ("A", "https://a.example", "https://a.example"),
+        ("B", "https://b.example", "https://b.example"),
+    ]
+    assert fake_dashscope.base_http_api_url == "https://global.example"
+
+
 @pytest.mark.parametrize("provider_name", ["openai", "together"])
 def test_judge_adapters_return_raw_text_and_request_json_mode(
     monkeypatch,
@@ -755,6 +865,77 @@ def test_retry_call_honors_retry_after_header_and_bounded_jitter():
     ) == "success"
     assert calls == ["called", "called"]
     assert delays == pytest.approx([3.3])
+
+
+def test_retry_call_caps_huge_retry_after_after_jitter():
+    from evaluation.providers.base import ProviderRequestError, retry_call
+
+    calls = []
+    delays = []
+
+    def operation():
+        calls.append("called")
+        if len(calls) == 1:
+            raise ProviderRequestError(
+                "test-provider",
+                "slow down",
+                status_code=429,
+                retry_after=10_000,
+            )
+        return "success"
+
+    assert retry_call(
+        operation,
+        attempts=2,
+        base_delay=1,
+        max_delay=5,
+        jitter=0.5,
+        random_source=lambda: 1,
+        sleep=delays.append,
+    ) == "success"
+    assert delays == [5]
+
+
+@pytest.mark.parametrize("retry_after", [float("inf"), float("nan")])
+def test_non_finite_retry_after_is_rejected(retry_after):
+    from evaluation.providers.base import ProviderRequestError
+
+    error = ProviderRequestError(
+        "test-provider",
+        "invalid retry-after",
+        status_code=429,
+        retry_after=retry_after,
+    )
+
+    assert error.retry_after is None
+
+
+def test_retry_call_clamps_backoff_after_jitter():
+    from evaluation.providers.base import ProviderRequestError, retry_call
+
+    calls = []
+    delays = []
+
+    def operation():
+        calls.append("called")
+        if len(calls) == 1:
+            raise ProviderRequestError(
+                "test-provider",
+                "temporary",
+                status_code=503,
+            )
+        return "success"
+
+    assert retry_call(
+        operation,
+        attempts=2,
+        base_delay=4,
+        max_delay=5,
+        jitter=0.5,
+        random_source=lambda: 1,
+        sleep=delays.append,
+    ) == "success"
+    assert delays == [5]
 
 
 def test_provider_wraps_permanent_request_failure_once_with_context(

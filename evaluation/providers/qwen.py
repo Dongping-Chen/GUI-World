@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Callable, Mapping, Sequence
@@ -15,6 +17,34 @@ from evaluation.providers.base import (
     require_response_text,
     retry_call,
 )
+
+
+_DASHSCOPE_ENDPOINT_LOCK = threading.RLock()
+_MISSING = object()
+
+
+@contextmanager
+def _dashscope_endpoint_scope(client, base_url):
+    """Scope DashScope's upload endpoint across the complete SDK call.
+
+    DashScope 1.26.x preprocesses local file URIs before forwarding the
+    per-call ``base_address`` and uses the module global for that upload. The
+    SDK limitation requires a locked, temporary global override.
+    """
+
+    with _DASHSCOPE_ENDPOINT_LOCK:
+        if not base_url:
+            yield
+            return
+        previous = getattr(client, "base_http_api_url", _MISSING)
+        client.base_http_api_url = base_url
+        try:
+            yield
+        finally:
+            if previous is _MISSING:
+                delattr(client, "base_http_api_url")
+            else:
+                client.base_http_api_url = previous
 
 
 def _value(container, key):
@@ -93,7 +123,8 @@ class QwenProvider:
                 }
                 if self._base_url:
                     request_options["base_address"] = self._base_url
-                response = conversation.call(**request_options)
+                with _dashscope_endpoint_scope(client, self._base_url):
+                    response = conversation.call(**request_options)
                 if isinstance(response, Mapping):
                     status_code = response.get("status_code", 200)
                     code = response.get("code", status_code)
