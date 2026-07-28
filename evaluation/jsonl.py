@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -23,6 +24,46 @@ def record_id(record: dict[str, Any]) -> str:
     if "video_path" in record:
         return str(record["video_path"])
     raise JsonlError("Record must contain either an 'id' or 'video_path' field.")
+
+
+def _fsync_directory(directory: Path) -> None:
+    if os.name != "posix":
+        return
+
+    descriptor: int | None = None
+    primary_error: BaseException | None = None
+    try:
+        try:
+            flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            descriptor = os.open(directory, flags)
+            os.fsync(descriptor)
+        except OSError as error:
+            raise JsonlError(
+                "JSONL replacement may already be committed, but destination "
+                f"directory {directory} could not be synced: {error}"
+            ) from error
+    except BaseException as error:
+        primary_error = error
+        raise
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError as error:
+                if primary_error is not None:
+                    warnings.warn(
+                        f"Directory descriptor cleanup failed ({error}) for "
+                        f"{directory} while handling "
+                        f"{type(primary_error).__name__}.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    raise JsonlError(
+                        "JSONL replacement may already be committed, but "
+                        f"destination directory {directory} could not be "
+                        f"closed after syncing: {error}"
+                    ) from error
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -89,45 +130,65 @@ def atomic_write_jsonl(
         raise JsonlError(f"Destination parent is not a directory: {parent}")
 
     temporary_path: Path | None = None
+    primary_error: BaseException | None = None
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="\n",
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            dir=parent,
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            for line_number, record in enumerate(records, start=1):
-                if not isinstance(record, dict):
-                    raise JsonlError(
-                        f"JSONL record {line_number} must be a JSON object."
-                    )
-                try:
-                    serialized = json.dumps(
-                        record,
-                        ensure_ascii=False,
-                        allow_nan=False,
-                    )
-                except (TypeError, ValueError) as error:
-                    raise JsonlError(
-                        f"JSONL record {line_number} is not valid JSON: {error}"
-                    ) from error
-                temporary.write(serialized)
-                temporary.write("\n")
-            temporary.flush()
-            os.fsync(temporary.fileno())
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="\n",
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                dir=parent,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                id_lines: dict[str, int] = {}
+                for line_number, record in enumerate(records, start=1):
+                    if not isinstance(record, dict):
+                        raise JsonlError(
+                            f"JSONL record {line_number} must be a JSON object."
+                        )
+                    try:
+                        stable_id = record_id(record)
+                    except JsonlError as error:
+                        raise JsonlError(
+                            f"Invalid JSONL record {line_number}: {error}"
+                        ) from error
+                    if stable_id in id_lines:
+                        raise JsonlError(
+                            f"Duplicate record ID {stable_id!r} at JSONL "
+                            f"record {line_number}; first seen at record "
+                            f"{id_lines[stable_id]}."
+                        )
+                    id_lines[stable_id] = line_number
+                    try:
+                        serialized = json.dumps(
+                            record,
+                            ensure_ascii=False,
+                            allow_nan=False,
+                        )
+                    except (TypeError, ValueError) as error:
+                        raise JsonlError(
+                            f"JSONL record {line_number} is not valid JSON: {error}"
+                        ) from error
+                    temporary.write(serialized)
+                    temporary.write("\n")
+                temporary.flush()
+                os.fsync(temporary.fileno())
 
-        os.replace(temporary_path, path)
-        temporary_path = None
-    except JsonlError:
+            os.replace(temporary_path, path)
+            temporary_path = None
+            _fsync_directory(parent)
+        except JsonlError:
+            raise
+        except OSError as error:
+            raise JsonlError(
+                f"Could not atomically write JSONL file {path}: {error}"
+            ) from error
+    except BaseException as error:
+        primary_error = error
         raise
-    except OSError as error:
-        raise JsonlError(
-            f"Could not atomically write JSONL file {path}: {error}"
-        ) from error
     finally:
         if temporary_path is not None:
             try:
@@ -135,10 +196,19 @@ def atomic_write_jsonl(
             except FileNotFoundError:
                 pass
             except OSError as error:
-                raise JsonlError(
-                    f"Could not clean temporary JSONL file "
-                    f"{temporary_path}: {error}"
-                ) from error
+                if primary_error is not None:
+                    warnings.warn(
+                        f"Temporary JSONL cleanup failed ({error}) for "
+                        f"{temporary_path} while handling "
+                        f"{type(primary_error).__name__}.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    raise JsonlError(
+                        f"Could not clean temporary JSONL file "
+                        f"{temporary_path}: {error}"
+                    ) from error
 
 
 def upsert_record(
@@ -147,10 +217,23 @@ def upsert_record(
 ) -> list[dict[str, Any]]:
     """Replace a matching record in place, or append a new record."""
 
+    record_ids: list[str] = []
+    id_positions: dict[str, int] = {}
+    for position, record in enumerate(records, start=1):
+        stable_id = record_id(record)
+        if stable_id in id_positions:
+            raise JsonlError(
+                f"Duplicate record ID {stable_id!r} in existing records at "
+                f"position {position}; first seen at position "
+                f"{id_positions[stable_id]}."
+            )
+        id_positions[stable_id] = position
+        record_ids.append(stable_id)
+
     value_id = record_id(value)
     updated = list(records)
-    for index, record in enumerate(updated):
-        if record_id(record) == value_id:
+    for index, stable_id in enumerate(record_ids):
+        if stable_id == value_id:
             updated[index] = value
             return updated
     updated.append(value)

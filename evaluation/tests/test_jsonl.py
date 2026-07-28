@@ -188,6 +188,98 @@ def test_atomic_write_jsonl_requires_an_existing_parent_directory(tmp_path):
     assert not path.exists()
 
 
+def test_atomic_write_jsonl_fsyncs_directory_after_replace(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "records.jsonl"
+    events = []
+    real_replace = jsonl.os.replace
+
+    def track_replace(source, destination):
+        events.append(("replace", Path(destination)))
+        real_replace(source, destination)
+
+    def track_directory_fsync(directory):
+        events.append(("fsync", directory))
+
+    monkeypatch.setattr(jsonl.os, "replace", track_replace)
+    monkeypatch.setattr(jsonl, "_fsync_directory", track_directory_fsync)
+
+    atomic_write_jsonl(path, [{"id": "first"}])
+
+    assert events == [("replace", path), ("fsync", path.parent)]
+
+
+def test_fsync_directory_opens_syncs_and_closes_on_posix(tmp_path, monkeypatch):
+    calls = []
+    descriptor = 73
+
+    monkeypatch.setattr(jsonl.os, "name", "posix")
+    monkeypatch.setattr(
+        jsonl.os,
+        "open",
+        lambda path, flags: calls.append(("open", path, flags)) or descriptor,
+    )
+    monkeypatch.setattr(
+        jsonl.os,
+        "fsync",
+        lambda value: calls.append(("fsync", value)),
+    )
+    monkeypatch.setattr(
+        jsonl.os,
+        "close",
+        lambda value: calls.append(("close", value)),
+    )
+
+    jsonl._fsync_directory(tmp_path)
+
+    expected_flags = jsonl.os.O_RDONLY | getattr(jsonl.os, "O_DIRECTORY", 0)
+    assert calls == [
+        ("open", tmp_path, expected_flags),
+        ("fsync", descriptor),
+        ("close", descriptor),
+    ]
+
+
+def test_fsync_directory_is_an_explicit_noop_off_posix(tmp_path, monkeypatch):
+    def unexpected_open(path, flags):
+        raise AssertionError("Non-POSIX platforms must not open directories.")
+
+    monkeypatch.setattr(jsonl.os, "name", "nt")
+    monkeypatch.setattr(jsonl.os, "open", unexpected_open)
+
+    assert jsonl._fsync_directory(tmp_path) is None
+
+
+@pytest.mark.parametrize("operation", ["open", "fsync", "close"])
+def test_fsync_directory_errors_warn_that_replacement_may_be_committed(
+    tmp_path,
+    monkeypatch,
+    operation,
+):
+    descriptor = 41
+    closed = []
+    monkeypatch.setattr(jsonl.os, "name", "posix")
+    monkeypatch.setattr(jsonl.os, "open", lambda path, flags: descriptor)
+    monkeypatch.setattr(jsonl.os, "fsync", lambda value: None)
+    monkeypatch.setattr(jsonl.os, "close", closed.append)
+
+    def fail(*args):
+        raise OSError(f"simulated {operation} failure")
+
+    monkeypatch.setattr(jsonl.os, operation, fail)
+
+    with pytest.raises(JsonlError) as raised:
+        jsonl._fsync_directory(tmp_path)
+
+    message = str(raised.value)
+    assert "may already be committed" in message
+    assert str(tmp_path) in message
+    assert f"simulated {operation} failure" in message
+    assert closed == ([descriptor] if operation == "fsync" else [])
+
+
 def test_atomic_write_jsonl_replace_failure_preserves_output_and_cleans_temp(
     tmp_path,
     monkeypatch,
@@ -206,6 +298,91 @@ def test_atomic_write_jsonl_replace_failure_preserves_output_and_cleans_temp(
 
     assert path.read_bytes() == original
     assert [entry for entry in tmp_path.iterdir() if entry != path] == []
+
+
+def test_cleanup_failure_does_not_mask_replace_failure(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "records.jsonl"
+    original = b'{"id": "old"}\n'
+    path.write_bytes(original)
+    real_unlink = Path.unlink
+
+    def fail_replace(source, destination):
+        raise OSError("primary replace failure")
+
+    def fail_unlink(temporary_path):
+        raise OSError("secondary cleanup failure")
+
+    monkeypatch.setattr(jsonl.os, "replace", fail_replace)
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+
+    with pytest.warns(RuntimeWarning, match="secondary cleanup failure"):
+        with pytest.raises(JsonlError, match="primary replace failure") as raised:
+            atomic_write_jsonl(path, [{"id": "new"}])
+
+    assert "secondary cleanup failure" not in str(raised.value)
+    assert path.read_bytes() == original
+    temporary_paths = [entry for entry in tmp_path.iterdir() if entry != path]
+    assert len(temporary_paths) == 1
+    real_unlink(temporary_paths[0])
+
+
+def test_cleanup_failure_does_not_mask_keyboard_interrupt(
+    tmp_path,
+    monkeypatch,
+):
+    path = tmp_path / "records.jsonl"
+    original = b'{"id": "old"}\n'
+    path.write_bytes(original)
+    real_unlink = Path.unlink
+
+    def interrupted_records():
+        yield {"id": "first"}
+        raise KeyboardInterrupt("primary interrupt")
+
+    def fail_unlink(temporary_path):
+        raise OSError("secondary cleanup failure")
+
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+
+    with pytest.warns(RuntimeWarning, match=r"secondary cleanup failure.*\.tmp"):
+        with pytest.raises(KeyboardInterrupt, match="primary interrupt"):
+            atomic_write_jsonl(path, interrupted_records())
+
+    assert path.read_bytes() == original
+    temporary_paths = [entry for entry in tmp_path.iterdir() if entry != path]
+    assert len(temporary_paths) == 1
+    real_unlink(temporary_paths[0])
+
+
+def test_atomic_write_jsonl_rejects_missing_stable_id_without_replacing_output(
+    tmp_path,
+):
+    path = tmp_path / "records.jsonl"
+    original = b'{"id": "old"}\n'
+    path.write_bytes(original)
+
+    with pytest.raises(JsonlError, match=r"'id'.*'video_path'"):
+        atomic_write_jsonl(path, [{"answer": "missing stable ID"}])
+
+    assert path.read_bytes() == original
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_atomic_write_jsonl_rejects_coerced_duplicate_ids_before_replace(
+    tmp_path,
+):
+    path = tmp_path / "records.jsonl"
+    original = b'{"id": "old"}\n'
+    path.write_bytes(original)
+
+    with pytest.raises(JsonlError, match=r"Duplicate.*'1'"):
+        atomic_write_jsonl(path, [{"id": 1}, {"id": "1"}])
+
+    assert path.read_bytes() == original
+    assert list(tmp_path.iterdir()) == [path]
 
 
 def test_upsert_record_replaces_matching_id_in_place_without_mutating_input():
@@ -234,3 +411,13 @@ def test_upsert_record_appends_new_id_after_existing_records():
     value = {"id": "third"}
 
     assert upsert_record(records, value) == [*records, value]
+
+
+def test_upsert_record_rejects_preexisting_coerced_duplicate_ids():
+    records = [
+        {"id": 1, "answer": "first"},
+        {"id": "1", "answer": "duplicate"},
+    ]
+
+    with pytest.raises(JsonlError, match=r"Duplicate.*'1'"):
+        upsert_record(records, {"id": 1, "answer": "replacement"})
