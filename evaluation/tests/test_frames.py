@@ -102,6 +102,13 @@ def test_annotated_indices_preserve_order_deduplicate_and_clamp():
     ) == [4, 1, 3]
 
 
+def test_annotated_indices_cap_at_ten_after_deduplication():
+    keyframes = [{"frame": 0}, {"frame": 0}]
+    keyframes.extend({"frame": index} for index in range(1, 11))
+
+    assert annotated_indices(keyframes, frame_count=20) == list(range(10))
+
+
 @pytest.mark.parametrize("frame", [-1, 1.0, "1", True, None])
 def test_annotated_indices_reject_negative_and_non_integer_frames(frame):
     with pytest.raises(FrameExtractionError, match="non-negative integer"):

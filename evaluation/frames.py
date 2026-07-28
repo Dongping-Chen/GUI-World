@@ -84,7 +84,7 @@ def annotated_indices(
                 "Annotated frame values must be non-negative integers."
             )
         indices.append(min(frame, frame_count - 1))
-    return _deduplicate(indices)
+    return _deduplicate(indices)[:10]
 
 
 def extract_frames(
