@@ -66,7 +66,10 @@ class JudgeProvider(Protocol):
         prompt: str,
         json_output: bool,
     ) -> str:
-        """Return the raw judge response text."""
+        """Return raw judge text.
+
+        Implementations, including injected providers, must be thread-safe.
+        """
 
 
 def require_env(names: Sequence[str]) -> dict[str, str]:

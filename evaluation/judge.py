@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import json
 import math
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,7 +15,8 @@ from evaluation.jsonl import (
     record_id,
     upsert_record,
 )
-from evaluation.prompts import TASK_NAMES
+from evaluation.parsing import ResponseParseError, extract_json_object
+from evaluation.prompts import MULTIPLE_CHOICE_TASKS, TASK_NAMES
 from evaluation.providers import (
     JudgeProvider,
     ProviderError,
@@ -159,10 +159,10 @@ def judge_free_form(
             "Free-form judge output must be JSON text."
         )
     try:
-        value = json.loads(raw)
-    except json.JSONDecodeError as error:
+        value = extract_json_object(raw)
+    except ResponseParseError as error:
         raise JudgeResponseError(
-            f"Free-form judge output is malformed JSON: {error.msg}"
+            f"Free-form judge output is malformed JSON: {error}"
         ) from error
     return _validate_free_form(value)
 
@@ -195,7 +195,32 @@ def _model_answer(task: dict) -> str | None:
     if not isinstance(result, dict):
         return None
     answer = result.get("Answer")
-    return answer if isinstance(answer, str) else None
+    if not isinstance(answer, str) or not answer.strip():
+        return None
+    return answer
+
+
+def _validate_record_for_judging(record: dict) -> None:
+    try:
+        stable_id = record_id(record)
+    except JsonlError as error:
+        raise JudgeError(f"Invalid selected record ID: {error}") from error
+    tasks = record.get("result")
+    if not isinstance(tasks, dict):
+        raise JudgeError(
+            f"Record {stable_id!r} result must be an object."
+        )
+    for task_name in TASK_NAMES:
+        task = tasks.get(task_name)
+        if not isinstance(task, dict) or _model_answer(task) is None:
+            continue
+        for field in ("q", "a"):
+            value = task.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise JudgeError(
+                    f"Record {stable_id!r} task {task_name!r} field "
+                    f"{field!r} must be a non-empty string."
+                )
 
 
 def _valid_existing_judge(
@@ -213,7 +238,7 @@ def _valid_existing_judge(
     ):
         return False
     try:
-        if task_name in {"MCQA", "Reasoning"}:
+        if task_name in MULTIPLE_CHOICE_TASKS:
             _validate_multiple_choice(previous["LLM_Judge"])
         else:
             _validate_free_form(previous["LLM_Judge"])
@@ -259,7 +284,7 @@ def _judge_record(
             continue
 
         try:
-            if task_name in {"MCQA", "Reasoning"}:
+            if task_name in MULTIPLE_CHOICE_TASKS:
                 judgment = judge_multiple_choice(
                     provider,
                     task["q"],
@@ -410,6 +435,9 @@ def run_judge(
 
     input_records = read_jsonl(input_path)
     selected_end = _validate_range(len(input_records), start, end)
+    selected = input_records[start:selected_end]
+    for record in selected:
+        _validate_record_for_judging(record)
     output_records = (
         read_jsonl(output_path)
         if resume and output_path.exists()
@@ -423,7 +451,6 @@ def run_judge(
         record_id(record): record
         for record in output_records
     }
-    selected = input_records[start:selected_end]
     completed = {}
     next_to_write = 0
 

@@ -5,6 +5,8 @@ import importlib
 import io
 import sys
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1235,6 +1237,95 @@ def test_sdk_client_construction_disables_internal_retries(
     provider._get_client()
 
     assert constructor_calls[0]["max_retries"] == 0
+
+
+@pytest.mark.parametrize(
+    ("provider_name", "module_name", "constructor_name"),
+    [
+        ("openai", "openai", "OpenAI"),
+        ("together", "together", "Together"),
+    ],
+)
+def test_judge_provider_initializes_one_client_without_serializing_requests(
+    monkeypatch,
+    provider_name,
+    module_name,
+    constructor_name,
+):
+    from evaluation.providers import create_judge_provider
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("judge", provider_name)],
+    )
+    constructor_calls = []
+    request_calls = []
+    request_barrier = threading.Barrier(2)
+
+    class FakeConnectionError(Exception):
+        pass
+
+    class FakeTimeoutError(Exception):
+        pass
+
+    def create(**kwargs):
+        request_calls.append((threading.get_ident(), kwargs))
+        request_barrier.wait(timeout=1)
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content='{"Score": 4}')
+                )
+            ]
+        )
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create)
+        )
+    )
+
+    def constructor(**kwargs):
+        constructor_calls.append(kwargs)
+        time.sleep(0.03)
+        return client
+
+    fake_module = SimpleNamespace(
+        APIConnectionError=FakeConnectionError,
+        APITimeoutError=FakeTimeoutError,
+    )
+    setattr(fake_module, constructor_name, constructor)
+    monkeypatch.setitem(sys.modules, module_name, fake_module)
+    provider = create_judge_provider(provider_name)
+    start_barrier = threading.Barrier(3)
+
+    def complete(index):
+        start_barrier.wait(timeout=1)
+        return provider.complete("system", f"prompt-{index}", True)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(complete, index) for index in range(2)]
+        start_barrier.wait(timeout=1)
+        assert [future.result(timeout=2) for future in futures] == [
+            '{"Score": 4}',
+            '{"Score": 4}',
+        ]
+
+    assert len(constructor_calls) == 1
+    assert len(request_calls) == 2
+    assert len({thread_id for thread_id, _ in request_calls}) == 2
+    assert provider._client is client
+    assert provider._transient_exceptions == (
+        FakeConnectionError,
+        FakeTimeoutError,
+    )
+
+
+def test_judge_provider_protocol_requires_thread_safe_implementations():
+    from evaluation.providers.base import JudgeProvider
+
+    assert "thread-safe" in JudgeProvider.complete.__doc__
 
 
 @pytest.mark.parametrize(

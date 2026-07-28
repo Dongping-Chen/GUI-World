@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
+import threading
 from typing import Callable, Sequence
 
 from PIL import Image
@@ -139,23 +140,31 @@ class OpenAIJudgeProvider:
         self._random_source = random_source
         self._jitter = jitter
         self._transient_exceptions = ()
+        self._client_lock = threading.Lock()
 
     def _get_client(self):
         if self._client is None:
-            import openai
+            with self._client_lock:
+                if self._client is None:
+                    import openai
 
-            self._transient_exceptions = tuple(
-                error_type
-                for name in ("APIConnectionError", "APITimeoutError")
-                if isinstance(
-                    (error_type := getattr(openai, name, None)),
-                    type,
-                )
-            )
-            self._client = openai.OpenAI(
-                api_key=self._api_key,
-                max_retries=0,
-            )
+                    transient_exceptions = tuple(
+                        error_type
+                        for name in (
+                            "APIConnectionError",
+                            "APITimeoutError",
+                        )
+                        if isinstance(
+                            (error_type := getattr(openai, name, None)),
+                            type,
+                        )
+                    )
+                    client = openai.OpenAI(
+                        api_key=self._api_key,
+                        max_retries=0,
+                    )
+                    self._transient_exceptions = transient_exceptions
+                    self._client = client
         return self._client
 
     def complete(

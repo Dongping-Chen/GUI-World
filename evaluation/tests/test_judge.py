@@ -4,6 +4,7 @@ import copy
 import json
 import threading
 import time
+import warnings
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,8 @@ class FakeJudgeProvider:
         self.delays = delays or {}
         self.calls = []
         self._lock = threading.Lock()
+        self._active = 0
+        self.max_active = 0
 
     def complete(self, system_prompt, prompt, json_output):
         with self._lock:
@@ -31,19 +34,27 @@ class FakeJudgeProvider:
                     "thread": threading.get_ident(),
                 }
             )
-        for marker, delay in self.delays.items():
-            if marker in prompt:
-                time.sleep(delay)
-                break
-        if any(marker in prompt for marker in self.failures):
-            raise RuntimeError("simulated provider failure")
-        if callable(self.response):
-            return self.response(system_prompt, prompt, json_output)
-        if self.response is not None:
-            return self.response
-        if json_output:
-            return json.dumps({"Evaluation": "Relevant and accurate.", "Score": 4})
-        return " Yes. "
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+        try:
+            for marker, delay in self.delays.items():
+                if marker in prompt:
+                    time.sleep(delay)
+                    break
+            if any(marker in prompt for marker in self.failures):
+                raise RuntimeError("simulated provider failure")
+            if callable(self.response):
+                return self.response(system_prompt, prompt, json_output)
+            if self.response is not None:
+                return self.response
+            if json_output:
+                return json.dumps(
+                    {"Evaluation": "Relevant and accurate.", "Score": 4}
+                )
+            return " Yes. "
+        finally:
+            with self._lock:
+                self._active -= 1
 
 
 def _write_jsonl(path, records):
@@ -106,6 +117,24 @@ def test_judge_free_form_uses_rubric_and_returns_validated_object():
     assert "What happened?" in call["prompt"]
     assert "The user opened Settings." in call["prompt"]
     assert "Settings was opened." in call["prompt"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        '```json\n{"Evaluation": "ok", "Score": 4}\n```',
+        'Judge result: {"Evaluation": "ok", "Score": 4} End.',
+    ],
+)
+def test_judge_free_form_extracts_embedded_json_object(response):
+    from evaluation.judge import judge_free_form
+
+    assert judge_free_form(
+        FakeJudgeProvider(response=response),
+        "question",
+        "gold",
+        "answer",
+    ) == {"Evaluation": "ok", "Score": 4}
 
 
 @pytest.mark.parametrize(
@@ -402,6 +431,7 @@ def test_concurrent_records_persist_on_caller_thread_in_input_order(
     ]
     assert provider.calls
     assert all(call["thread"] != caller_thread for call in provider.calls)
+    assert provider.max_active > 1
 
 
 def test_start_end_select_exact_records(
@@ -487,6 +517,169 @@ def test_output_parent_preflight_precedes_provider_calls(
 
     assert provider.calls == []
     assert not output_path.parent.exists()
+
+
+@pytest.mark.parametrize(
+    "malformation",
+    [
+        "result",
+        "missing_q",
+        "non_string_q",
+        "blank_q",
+        "missing_a",
+        "non_string_a",
+        "blank_a",
+    ],
+)
+def test_selected_records_are_validated_before_any_provider_call_or_write(
+    tmp_path,
+    benchmark_record,
+    monkeypatch,
+    malformation,
+):
+    from evaluation import judge
+    from evaluation.judge import JudgeError, run_judge
+
+    valid = _benchmark_result(benchmark_record, "valid-first")
+    malformed = _benchmark_result(benchmark_record, "malformed-second")
+    if malformation == "result":
+        malformed["result"] = []
+    else:
+        field = malformation[-1]
+        task = malformed["result"]["Prediction"]
+        if malformation.startswith("missing"):
+            task.pop(field)
+        elif malformation.startswith("non_string"):
+            task[field] = 7
+        else:
+            task[field] = "   "
+    input_path = _write_jsonl(
+        tmp_path / "input.jsonl",
+        [valid, malformed],
+    )
+    output_path = tmp_path / "output.jsonl"
+    provider = FakeJudgeProvider(delays={"valid-first": 0.01})
+    writes = []
+    monkeypatch.setattr(
+        judge,
+        "atomic_write_jsonl",
+        lambda path, records: writes.append((path, list(records))),
+    )
+
+    with pytest.raises(JudgeError):
+        run_judge(input_path, output_path, provider, workers=2)
+
+    assert provider.calls == []
+    assert writes == []
+    assert not output_path.exists()
+
+
+def test_invalid_selected_record_id_precedes_provider_calls_and_writes(
+    tmp_path,
+    benchmark_record,
+    monkeypatch,
+):
+    from evaluation import judge
+    from evaluation.jsonl import JsonlError
+    from evaluation.judge import run_judge
+
+    valid = _benchmark_result(benchmark_record, "valid-first")
+    malformed = _benchmark_result(benchmark_record, "missing-id")
+    malformed.pop("id")
+    malformed.pop("video_path")
+    input_path = _write_jsonl(
+        tmp_path / "input.jsonl",
+        [valid, malformed],
+    )
+    output_path = tmp_path / "output.jsonl"
+    provider = FakeJudgeProvider()
+    writes = []
+    monkeypatch.setattr(
+        judge,
+        "atomic_write_jsonl",
+        lambda path, records: writes.append((path, list(records))),
+    )
+
+    with pytest.raises(JsonlError):
+        run_judge(input_path, output_path, provider, workers=2)
+
+    assert provider.calls == []
+    assert writes == []
+    assert not output_path.exists()
+
+
+@pytest.mark.parametrize("warnings_as_errors", [False, True])
+def test_output_preflight_cleanup_does_not_mask_primary_close_failure(
+    tmp_path,
+    benchmark_record,
+    monkeypatch,
+    warnings_as_errors,
+):
+    from evaluation import judge
+    from evaluation.judge import JudgeError, run_judge
+
+    input_path = _write_jsonl(
+        tmp_path / "input.jsonl",
+        [_benchmark_result(benchmark_record, "one")],
+    )
+    output_path = tmp_path / "output.jsonl"
+    temporary_path = tmp_path / ".output.jsonl.preflight.tmp"
+    provider = FakeJudgeProvider()
+    writes = []
+
+    class CloseFailure:
+        name = str(temporary_path)
+
+        def __enter__(self):
+            temporary_path.touch()
+            return self
+
+        def __exit__(self, error_type, error, traceback):
+            raise OSError("primary judge preflight close failure")
+
+    def fail_unlink(path):
+        raise OSError("secondary judge preflight cleanup failure")
+
+    monkeypatch.setattr(
+        judge.tempfile,
+        "NamedTemporaryFile",
+        lambda **kwargs: CloseFailure(),
+    )
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+    monkeypatch.setattr(
+        judge,
+        "atomic_write_jsonl",
+        lambda path, records: writes.append((path, list(records))),
+    )
+
+    def invoke():
+        return run_judge(input_path, output_path, provider)
+
+    if warnings_as_errors:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            with pytest.raises(
+                JudgeError,
+                match="primary judge preflight close failure",
+            ) as raised:
+                invoke()
+    else:
+        with pytest.warns(
+            RuntimeWarning,
+            match="secondary judge preflight cleanup failure",
+        ):
+            with pytest.raises(
+                JudgeError,
+                match="primary judge preflight close failure",
+            ) as raised:
+                invoke()
+
+    assert any(
+        "secondary judge preflight cleanup failure" in detail
+        for detail in raised.value.cleanup_errors
+    )
+    assert provider.calls == []
+    assert writes == []
 
 
 def test_existing_output_is_preserved_without_resume(
