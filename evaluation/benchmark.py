@@ -262,7 +262,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument(
         "--output",
-        required=True,
+        default="auto",
         help="Output JSONL path, or 'auto' for a deterministic filename.",
     )
     parser.add_argument(
@@ -320,7 +320,7 @@ def _auto_output_path(
         f"output_{provider_name}_{scenario}_{strategy}_"
         f"{start}_{selected_end}.jsonl"
     )
-    return Path.cwd() / filename
+    return input_path.parent / filename
 
 
 def main(argv=None) -> int:

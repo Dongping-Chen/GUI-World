@@ -479,10 +479,14 @@ def test_cli_canonical_options_and_auto_output_are_deterministic(
 ):
     from evaluation import benchmark
 
+    input_directory = tmp_path / "benchmark-data"
+    input_directory.mkdir()
     input_path = _write_jsonl(
-        tmp_path / "input.jsonl",
+        input_directory / "input.jsonl",
         [_record(benchmark_record, "one", "one.mp4")],
     )
+    working_directory = tmp_path / "different-working-directory"
+    working_directory.mkdir()
     provider = object()
     factory_calls = []
     run_calls = []
@@ -497,7 +501,7 @@ def test_cli_canonical_options_and_auto_output_are_deterministic(
         "run_benchmark",
         lambda *args, **kwargs: run_calls.append((args, kwargs)),
     )
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.chdir(working_directory)
 
     assert benchmark.main(
         [
@@ -540,7 +544,7 @@ def test_cli_canonical_options_and_auto_output_are_deterministic(
     args, kwargs = run_calls[0]
     assert args[:3] == (
         input_path,
-        tmp_path / "output_azure-openai_ios_linspace_0_1.jsonl",
+        input_directory / "output_azure-openai_ios_linspace_0_1.jsonl",
         provider,
     )
     assert args[3:] == ("ios", "linspace")
@@ -550,6 +554,48 @@ def test_cli_canonical_options_and_auto_output_are_deterministic(
         "end": 1,
         "resume": True,
     }
+
+
+def test_cli_omitting_output_uses_auto_filename(
+    tmp_path,
+    benchmark_record,
+    monkeypatch,
+):
+    from evaluation import benchmark
+
+    input_path = _write_jsonl(
+        tmp_path / "input.jsonl",
+        [_record(benchmark_record, "one", "one.mp4")],
+    )
+    provider = object()
+    run_calls = []
+    monkeypatch.setattr(
+        benchmark,
+        "create_inference_provider",
+        lambda name, **kwargs: provider,
+    )
+    monkeypatch.setattr(
+        benchmark,
+        "run_benchmark",
+        lambda *args, **kwargs: run_calls.append((args, kwargs)),
+    )
+
+    assert benchmark.main(
+        [
+            "--input",
+            str(input_path),
+            "--provider",
+            "gemini",
+            "--scenario",
+            "website",
+            "--strategy",
+            "annotated",
+        ]
+    ) == 0
+
+    assert run_calls[0][0][1] == (
+        tmp_path / "output_gemini_website_annotated_0_1.jsonl"
+    )
 
 
 def test_cli_legacy_option_names_and_values_map_to_canonical_workflow(
