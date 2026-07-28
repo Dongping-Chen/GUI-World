@@ -152,10 +152,16 @@ def retry_call(
 
     if isinstance(attempts, bool) or not isinstance(attempts, int) or attempts < 1:
         raise ValueError("Retry attempts must be a positive integer.")
+    if not math.isfinite(base_delay):
+        raise ValueError("Retry base delay must be finite.")
     if base_delay < 0:
         raise ValueError("Retry base delay must be non-negative.")
+    if not math.isfinite(jitter):
+        raise ValueError("Retry jitter must be finite.")
     if jitter < 0 or jitter > 1:
         raise ValueError("Retry jitter must be between zero and one.")
+    if not math.isfinite(max_delay):
+        raise ValueError("Retry maximum delay must be finite.")
     if max_delay < 0:
         raise ValueError("Retry maximum delay must be non-negative.")
 

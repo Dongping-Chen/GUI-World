@@ -720,6 +720,28 @@ def test_retry_call_uses_bounded_exponential_backoff():
     assert delays == [0.25, 0.5]
 
 
+@pytest.mark.parametrize(
+    ("parameter", "value"),
+    [
+        (parameter, value)
+        for parameter in ("base_delay", "jitter", "max_delay")
+        for value in (float("nan"), float("inf"), float("-inf"))
+    ],
+)
+def test_retry_call_rejects_non_finite_delay_parameters(parameter, value):
+    from evaluation.providers.base import retry_call
+
+    calls = []
+
+    with pytest.raises(ValueError):
+        retry_call(
+            lambda: calls.append("called"),
+            **{parameter: value},
+        )
+
+    assert calls == []
+
+
 def test_retry_call_raises_final_exception_after_attempt_limit():
     from evaluation.providers.base import ProviderRequestError, retry_call
 
