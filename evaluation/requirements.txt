@@ -1,0 +1,10 @@
+anthropic>=0.49,<1
+dashscope>=1.22,<2
+google-genai>=1.11,<2
+numpy>=1.23,<3
+openai>=1.68,<3
+opencv-python-headless>=4.7,<5
+Pillow>=9.5,<13
+pytest>=7.4,<9
+together>=1.5,<3
+tqdm>=4.64,<5
