@@ -34,6 +34,45 @@ def _write_video(path: Path, values: list[int]) -> Path:
     return path
 
 
+def _install_fake_captures(monkeypatch, values, reported_frame_count):
+    video_frames = [
+        np.full((8, 8, 3), value, dtype=np.uint8)
+        for value in values
+    ]
+    captures = []
+
+    class FakeCapture:
+        def __init__(self, path):
+            self.position = 0
+            self.read_calls = 0
+            self.released = False
+            captures.append(self)
+
+        def isOpened(self):
+            return True
+
+        def get(self, property_id):
+            assert property_id == cv2.CAP_PROP_FRAME_COUNT
+            return reported_frame_count
+
+        def read(self):
+            self.read_calls += 1
+            if self.position >= len(video_frames):
+                return False, None
+            frame = video_frames[self.position]
+            self.position += 1
+            return True, frame
+
+        def set(self, property_id, value):
+            raise AssertionError("Frame extraction must not seek randomly.")
+
+        def release(self):
+            self.released = True
+
+    monkeypatch.setattr(frames.cv2, "VideoCapture", FakeCapture)
+    return captures
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -109,6 +148,13 @@ def test_annotated_indices_cap_at_ten_after_deduplication():
     assert annotated_indices(keyframes, frame_count=20) == list(range(10))
 
 
+def test_annotated_indices_ignore_malformed_entries_after_ten_unique_frames():
+    keyframes = [{"frame": index} for index in range(10)]
+    keyframes.append({"frame": "malformed"})
+
+    assert annotated_indices(keyframes, frame_count=20) == list(range(10))
+
+
 @pytest.mark.parametrize("frame", [-1, 1.0, "1", True, None])
 def test_annotated_indices_reject_negative_and_non_integer_frames(frame):
     with pytest.raises(FrameExtractionError, match="non-negative integer"):
@@ -134,7 +180,7 @@ def test_extract_frames_requires_annotations_for_annotated_strategy(
         extract_frames(video_path, "annotated", keyframes=keyframes)
 
 
-def test_extract_frames_decodes_once_and_returns_requested_annotation_order(
+def test_extract_frames_uses_two_sequential_passes_without_seeking(
     tmp_path,
     monkeypatch,
 ):
@@ -180,14 +226,64 @@ def test_extract_frames_decodes_once_and_returns_requested_annotation_order(
         ],
     )
 
-    assert len(captures) == 1
-    assert captures[0].released
+    assert len(captures) == 2
+    assert all(capture.released for capture in captures)
     assert all(isinstance(image, Image.Image) for image in images)
     assert all(image.mode == "RGB" for image in images)
     assert [round(float(np.asarray(image).mean())) for image in images] == pytest.approx(
         [180, 60, 140],
         abs=5,
     )
+
+
+def test_extract_frames_clamps_annotations_to_over_reported_decodable_count(
+    tmp_path,
+    monkeypatch,
+):
+    video_path = tmp_path / "over-reported.avi"
+    video_path.touch()
+    captures = _install_fake_captures(
+        monkeypatch,
+        values=[20, 80, 140],
+        reported_frame_count=99,
+    )
+
+    images = extract_frames(
+        video_path,
+        "annotated",
+        keyframes=[{"frame": 98}, {"frame": 0}],
+    )
+
+    assert [round(float(np.asarray(image).mean())) for image in images] == [
+        140,
+        20,
+    ]
+    assert len(captures) == 2
+    assert all(capture.released for capture in captures)
+
+
+def test_extract_frames_uses_all_decodable_frames_when_metadata_under_reports(
+    tmp_path,
+    monkeypatch,
+):
+    video_path = tmp_path / "under-reported.avi"
+    video_path.touch()
+    captures = _install_fake_captures(
+        monkeypatch,
+        values=[20, 60, 100, 140],
+        reported_frame_count=1,
+    )
+
+    images = extract_frames(video_path, "linspace")
+
+    assert [round(float(np.asarray(image).mean())) for image in images] == [
+        20,
+        60,
+        100,
+        140,
+    ]
+    assert len(captures) == 2
+    assert all(capture.released for capture in captures)
 
 
 @pytest.mark.parametrize(
@@ -269,6 +365,9 @@ def test_extract_frames_rejects_zero_frame_video_and_releases_capture(
         def get(self, property_id):
             assert property_id == cv2.CAP_PROP_FRAME_COUNT
             return 0
+
+        def read(self):
+            return False, None
 
         def release(self):
             self.released = True

@@ -73,6 +73,7 @@ def annotated_indices(
         )
 
     indices = []
+    seen = set()
     for annotation in keyframes:
         if not isinstance(annotation, dict) or "frame" not in annotation:
             raise FrameExtractionError(
@@ -83,8 +84,14 @@ def annotated_indices(
             raise FrameExtractionError(
                 "Annotated frame values must be non-negative integers."
             )
-        indices.append(min(frame, frame_count - 1))
-    return _deduplicate(indices)[:10]
+        index = min(frame, frame_count - 1)
+        if index in seen:
+            continue
+        indices.append(index)
+        seen.add(index)
+        if len(indices) == 10:
+            break
+    return indices
 
 
 def extract_frames(
@@ -92,7 +99,12 @@ def extract_frames(
     strategy: str,
     keyframes=(),
 ) -> list[Image.Image]:
-    """Decode and return selected video frames as RGB Pillow images."""
+    """Decode and return selected video frames as RGB Pillow images.
+
+    The video is decoded twice: first to count actually decodable frames, then
+    to extract selections without random seeking. This favors correct frame
+    indices over single-pass performance.
+    """
 
     canonical = canonical_strategy(strategy)
     if canonical == "annotated" and not keyframes:
@@ -105,20 +117,32 @@ def extract_frames(
     if not path.is_file():
         raise FrameExtractionError(f"Video does not exist: {path}")
 
+    count_capture = cv2.VideoCapture(str(path))
+    try:
+        if not count_capture.isOpened():
+            raise FrameExtractionError(f"Could not open or read video: {path}")
+
+        frame_count = 0
+        while True:
+            decoded, _ = count_capture.read()
+            if not decoded:
+                break
+            frame_count += 1
+    finally:
+        count_capture.release()
+
+    if frame_count <= 0:
+        raise FrameExtractionError(f"Video contains zero frames: {path}")
+
+    if canonical == "linspace":
+        indices = linspace_indices(frame_count)
+    else:
+        indices = annotated_indices(list(keyframes), frame_count)
+
     capture = cv2.VideoCapture(str(path))
     try:
         if not capture.isOpened():
-            raise FrameExtractionError(f"Could not open or read video: {path}")
-
-        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        if frame_count <= 0:
-            raise FrameExtractionError(f"Video contains zero frames: {path}")
-
-        if canonical == "linspace":
-            indices = linspace_indices(frame_count)
-        else:
-            indices = annotated_indices(list(keyframes), frame_count)
-
+            raise FrameExtractionError(f"Could not reopen video: {path}")
         selected = {}
         targets = set(indices)
         last_index = max(indices)
