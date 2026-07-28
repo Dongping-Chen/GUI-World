@@ -6,6 +6,9 @@ from evaluation.providers.base import (
     InferenceProvider,
     JudgeProvider,
     ProviderConfigurationError,
+    ProviderError,
+    ProviderRequestError,
+    ProviderResponseError,
 )
 
 
@@ -84,6 +87,8 @@ def create_inference_provider(
     attempts: int = 3,
     base_delay: float = 1.0,
     sleep=None,
+    random_source=None,
+    jitter: float = 0.1,
 ) -> InferenceProvider:
     """Create an inference adapter from a canonical or legacy name."""
 
@@ -96,6 +101,8 @@ def create_inference_provider(
         attempts=attempts,
         base_delay=base_delay,
         sleep=sleep,
+        random_source=random_source,
+        jitter=jitter,
     )
 
 
@@ -106,6 +113,8 @@ def create_judge_provider(
     attempts: int = 3,
     base_delay: float = 1.0,
     sleep=None,
+    random_source=None,
+    jitter: float = 0.1,
 ) -> JudgeProvider:
     """Create a judge adapter from a canonical or legacy name."""
 
@@ -118,6 +127,8 @@ def create_judge_provider(
         attempts=attempts,
         base_delay=base_delay,
         sleep=sleep,
+        random_source=random_source,
+        jitter=jitter,
     )
 
 
@@ -125,6 +136,9 @@ __all__ = [
     "InferenceProvider",
     "JudgeProvider",
     "ProviderConfigurationError",
+    "ProviderError",
+    "ProviderRequestError",
+    "ProviderResponseError",
     "create_inference_provider",
     "create_judge_provider",
 ]

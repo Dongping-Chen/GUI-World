@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Callable
 
-from evaluation.providers.base import require_env, retry_call
+from evaluation.providers.base import (
+    chat_completion_text,
+    require_env,
+    retry_call,
+)
 
 
 class TogetherJudgeProvider:
@@ -15,6 +19,8 @@ class TogetherJudgeProvider:
         attempts: int = 3,
         base_delay: float = 1.0,
         sleep: Callable[[float], None] | None = None,
+        random_source: Callable[[], float] | None = None,
+        jitter: float = 0.1,
     ):
         names = ["TOGETHER_API_KEY"]
         if model_id is None:
@@ -26,12 +32,26 @@ class TogetherJudgeProvider:
         self._attempts = attempts
         self._base_delay = base_delay
         self._sleep = sleep
+        self._random_source = random_source
+        self._jitter = jitter
+        self._transient_exceptions = ()
 
     def _get_client(self):
         if self._client is None:
-            from together import Together
+            import together
 
-            self._client = Together(api_key=self._api_key)
+            self._transient_exceptions = tuple(
+                error_type
+                for name in ("APIConnectionError", "APITimeoutError")
+                if isinstance(
+                    (error_type := getattr(together, name, None)),
+                    type,
+                )
+            )
+            self._client = together.Together(
+                api_key=self._api_key,
+                max_retries=0,
+            )
         return self._client
 
     def complete(
@@ -49,13 +69,18 @@ class TogetherJudgeProvider:
         }
         if json_output:
             request_options["response_format"] = {"type": "json_object"}
+        client = self._get_client()
 
         response = retry_call(
-            lambda: self._get_client().chat.completions.create(
+            lambda: client.chat.completions.create(
                 **request_options
             ),
             attempts=self._attempts,
             base_delay=self._base_delay,
             sleep=self._sleep,
+            random_source=self._random_source,
+            jitter=self._jitter,
+            provider=self.provider_name,
+            transient_exceptions=self._transient_exceptions,
         )
-        return response.choices[0].message.content
+        return chat_completion_text(response, self.provider_name)

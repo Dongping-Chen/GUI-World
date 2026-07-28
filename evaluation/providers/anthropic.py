@@ -6,8 +6,12 @@ from typing import Callable, Sequence
 
 from PIL import Image
 
-from evaluation.parsing import normalize_answer
-from evaluation.providers.base import require_env, retry_call
+from evaluation.providers.base import (
+    ProviderResponseError,
+    normalize_provider_answer,
+    require_env,
+    retry_call,
+)
 
 
 def _jpeg_base64(image: Image.Image) -> str:
@@ -26,6 +30,8 @@ class AnthropicProvider:
         attempts: int = 3,
         base_delay: float = 1.0,
         sleep: Callable[[float], None] | None = None,
+        random_source: Callable[[], float] | None = None,
+        jitter: float = 0.1,
     ):
         names = ["ANTHROPIC_API_KEY"]
         if model_id is None:
@@ -37,12 +43,26 @@ class AnthropicProvider:
         self._attempts = attempts
         self._base_delay = base_delay
         self._sleep = sleep
+        self._random_source = random_source
+        self._jitter = jitter
+        self._transient_exceptions = ()
 
     def _get_client(self):
         if self._client is None:
-            from anthropic import Anthropic
+            import anthropic
 
-            self._client = Anthropic(api_key=self._api_key)
+            self._transient_exceptions = tuple(
+                error_type
+                for name in ("APIConnectionError", "APITimeoutError")
+                if isinstance(
+                    (error_type := getattr(anthropic, name, None)),
+                    type,
+                )
+            )
+            self._client = anthropic.Anthropic(
+                api_key=self._api_key,
+                max_retries=0,
+            )
         return self._client
 
     def generate(
@@ -62,9 +82,10 @@ class AnthropicProvider:
             for frame in frames
         ]
         content.append({"type": "text", "text": prompt})
+        client = self._get_client()
 
         response = retry_call(
-            lambda: self._get_client().messages.create(
+            lambda: client.messages.create(
                 model=self.model_id,
                 max_tokens=2048,
                 temperature=0.9,
@@ -73,10 +94,33 @@ class AnthropicProvider:
             attempts=self._attempts,
             base_delay=self._base_delay,
             sleep=self._sleep,
+            random_source=self._random_source,
+            jitter=self._jitter,
+            provider=self.provider_name,
+            transient_exceptions=self._transient_exceptions,
         )
-        text = next(
-            block.text
-            for block in response.content
-            if getattr(block, "text", None) is not None
-        )
-        return normalize_answer(text)
+        blocks = getattr(response, "content", None)
+        if not isinstance(blocks, Sequence) or isinstance(
+            blocks,
+            (str, bytes),
+        ):
+            raise ProviderResponseError(
+                self.provider_name,
+                "content must be a sequence of response blocks.",
+            )
+        text = None
+        for block in blocks:
+            candidate = (
+                block.get("text")
+                if isinstance(block, dict)
+                else getattr(block, "text", None)
+            )
+            if isinstance(candidate, str) and candidate.strip():
+                text = candidate
+                break
+        if text is None:
+            raise ProviderResponseError(
+                self.provider_name,
+                "content does not contain a non-empty text block.",
+            )
+        return normalize_provider_answer(text, self.provider_name)

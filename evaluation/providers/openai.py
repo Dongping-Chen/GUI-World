@@ -6,8 +6,12 @@ from typing import Callable, Sequence
 
 from PIL import Image
 
-from evaluation.parsing import normalize_answer
-from evaluation.providers.base import require_env, retry_call
+from evaluation.providers.base import (
+    chat_completion_text,
+    normalize_provider_answer,
+    require_env,
+    retry_call,
+)
 
 
 def _jpeg_base64(image: Image.Image) -> str:
@@ -26,6 +30,8 @@ class AzureOpenAIProvider:
         attempts: int = 3,
         base_delay: float = 1.0,
         sleep: Callable[[float], None] | None = None,
+        random_source: Callable[[], float] | None = None,
+        jitter: float = 0.1,
     ):
         names = [
             "AZURE_OPENAI_API_KEY",
@@ -43,15 +49,27 @@ class AzureOpenAIProvider:
         self._attempts = attempts
         self._base_delay = base_delay
         self._sleep = sleep
+        self._random_source = random_source
+        self._jitter = jitter
+        self._transient_exceptions = ()
 
     def _get_client(self):
         if self._client is None:
-            from openai import AzureOpenAI
+            import openai
 
-            self._client = AzureOpenAI(
+            self._transient_exceptions = tuple(
+                error_type
+                for name in ("APIConnectionError", "APITimeoutError")
+                if isinstance(
+                    (error_type := getattr(openai, name, None)),
+                    type,
+                )
+            )
+            self._client = openai.AzureOpenAI(
                 api_key=self._api_key,
                 azure_endpoint=self._endpoint,
                 api_version=self._api_version,
+                max_retries=0,
             )
         return self._client
 
@@ -70,9 +88,10 @@ class AzureOpenAIProvider:
             for frame in frames
         ]
         content.append({"type": "text", "text": prompt})
+        client = self._get_client()
 
         def request():
-            return self._get_client().chat.completions.create(
+            return client.chat.completions.create(
                 model=self.model_id,
                 messages=[{"role": "user", "content": content}],
                 max_tokens=2048,
@@ -85,8 +104,13 @@ class AzureOpenAIProvider:
             attempts=self._attempts,
             base_delay=self._base_delay,
             sleep=self._sleep,
+            random_source=self._random_source,
+            jitter=self._jitter,
+            provider=self.provider_name,
+            transient_exceptions=self._transient_exceptions,
         )
-        return normalize_answer(response.choices[0].message.content)
+        text = chat_completion_text(response, self.provider_name)
+        return normalize_provider_answer(text, self.provider_name)
 
 
 class OpenAIJudgeProvider:
@@ -99,6 +123,8 @@ class OpenAIJudgeProvider:
         attempts: int = 3,
         base_delay: float = 1.0,
         sleep: Callable[[float], None] | None = None,
+        random_source: Callable[[], float] | None = None,
+        jitter: float = 0.1,
     ):
         names = ["OPENAI_API_KEY"]
         if model_id is None:
@@ -110,12 +136,26 @@ class OpenAIJudgeProvider:
         self._attempts = attempts
         self._base_delay = base_delay
         self._sleep = sleep
+        self._random_source = random_source
+        self._jitter = jitter
+        self._transient_exceptions = ()
 
     def _get_client(self):
         if self._client is None:
-            from openai import OpenAI
+            import openai
 
-            self._client = OpenAI(api_key=self._api_key)
+            self._transient_exceptions = tuple(
+                error_type
+                for name in ("APIConnectionError", "APITimeoutError")
+                if isinstance(
+                    (error_type := getattr(openai, name, None)),
+                    type,
+                )
+            )
+            self._client = openai.OpenAI(
+                api_key=self._api_key,
+                max_retries=0,
+            )
         return self._client
 
     def complete(
@@ -133,13 +173,18 @@ class OpenAIJudgeProvider:
         }
         if json_output:
             request_options["response_format"] = {"type": "json_object"}
+        client = self._get_client()
 
         response = retry_call(
-            lambda: self._get_client().chat.completions.create(
+            lambda: client.chat.completions.create(
                 **request_options
             ),
             attempts=self._attempts,
             base_delay=self._base_delay,
             sleep=self._sleep,
+            random_source=self._random_source,
+            jitter=self._jitter,
+            provider=self.provider_name,
+            transient_exceptions=self._transient_exceptions,
         )
-        return response.choices[0].message.content
+        return chat_completion_text(response, self.provider_name)

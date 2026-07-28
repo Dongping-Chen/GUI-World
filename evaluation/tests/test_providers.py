@@ -499,6 +499,58 @@ def test_qwen_retries_non_success_dashscope_responses(monkeypatch):
     assert len(calls) == 2
 
 
+def test_qwen_base_url_is_isolated_per_provider_call(monkeypatch):
+    from evaluation.providers import create_inference_provider
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "qwen")],
+    )
+    calls = []
+
+    def call(**kwargs):
+        calls.append(kwargs)
+        return {
+            "output": {
+                "choices": [
+                    {
+                        "message": {
+                            "content": [{"text": '{"Answer": "Isolated."}'}]
+                        }
+                    }
+                ]
+            }
+        }
+
+    fake_dashscope = SimpleNamespace(
+        base_http_api_url="https://global.example",
+        MultiModalConversation=SimpleNamespace(call=call),
+    )
+    monkeypatch.setitem(sys.modules, "dashscope", fake_dashscope)
+
+    monkeypatch.setenv("DASHSCOPE_BASE_URL", "https://a.example")
+    provider_a = create_inference_provider("qwen")
+    monkeypatch.setenv("DASHSCOPE_BASE_URL", "https://b.example")
+    provider_b = create_inference_provider("qwen")
+    monkeypatch.delenv("DASHSCOPE_BASE_URL")
+    provider_default = create_inference_provider("qwen")
+
+    provider_a.generate("A", [_frame()])
+    provider_b.generate("B", [_frame()])
+    provider_a.generate("A again", [_frame()])
+    provider_default.generate("Default", [_frame()])
+
+    assert [call.get("base_address") for call in calls] == [
+        "https://a.example",
+        "https://b.example",
+        "https://a.example",
+        None,
+    ]
+    assert "base_address" not in calls[-1]
+    assert fake_dashscope.base_http_api_url == "https://global.example"
+
+
 @pytest.mark.parametrize("provider_name", ["openai", "together"])
 def test_judge_adapters_return_raw_text_and_request_json_mode(
     monkeypatch,
@@ -530,7 +582,7 @@ def test_judge_adapters_return_raw_text_and_request_json_mode(
 
 
 def test_retry_call_uses_bounded_exponential_backoff():
-    from evaluation.providers.base import retry_call
+    from evaluation.providers.base import ProviderRequestError, retry_call
 
     calls = []
     delays = []
@@ -538,7 +590,11 @@ def test_retry_call_uses_bounded_exponential_backoff():
     def operation():
         calls.append("called")
         if len(calls) < 3:
-            raise RuntimeError(f"failure-{len(calls)}")
+            raise ProviderRequestError(
+                "test-provider",
+                f"failure-{len(calls)}",
+                status_code=503,
+            )
         return "success"
 
     assert retry_call(
@@ -546,23 +602,458 @@ def test_retry_call_uses_bounded_exponential_backoff():
         attempts=3,
         base_delay=0.25,
         sleep=delays.append,
+        random_source=lambda: 0,
     ) == "success"
     assert len(calls) == 3
     assert delays == [0.25, 0.5]
 
 
 def test_retry_call_raises_final_exception_after_attempt_limit():
-    from evaluation.providers.base import retry_call
+    from evaluation.providers.base import ProviderRequestError, retry_call
 
-    errors = [RuntimeError("first"), RuntimeError("final")]
+    errors = [
+        ProviderRequestError("test-provider", "first", status_code=500),
+        ProviderRequestError("test-provider", "final", status_code=503),
+    ]
 
     def operation():
         raise errors.pop(0)
 
-    with pytest.raises(RuntimeError, match="final"):
-        retry_call(operation, attempts=2, base_delay=0, sleep=lambda _: None)
+    with pytest.raises(ProviderRequestError, match="final"):
+        retry_call(
+            operation,
+            attempts=2,
+            base_delay=0,
+            sleep=lambda _: None,
+            random_source=lambda: 0,
+        )
 
     assert errors == []
+
+
+@pytest.mark.parametrize("status_code", [408, 409, 429, 500, 503, 599])
+def test_retry_call_retries_only_transient_http_statuses(status_code):
+    from evaluation.providers.base import ProviderRequestError, retry_call
+
+    calls = []
+
+    def operation():
+        calls.append("called")
+        if len(calls) == 1:
+            raise ProviderRequestError(
+                "test-provider",
+                "transient",
+                status_code=status_code,
+            )
+        return "success"
+
+    assert retry_call(
+        operation,
+        attempts=2,
+        base_delay=0,
+        sleep=lambda _: None,
+        random_source=lambda: 0,
+    ) == "success"
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("status_code", [400, 401, 403, 404, 422])
+def test_retry_call_does_not_retry_permanent_http_statuses(status_code):
+    from evaluation.providers.base import ProviderRequestError, retry_call
+
+    calls = []
+
+    def operation():
+        calls.append("called")
+        raise ProviderRequestError(
+            "test-provider",
+            "permanent",
+            status_code=status_code,
+        )
+
+    with pytest.raises(ProviderRequestError, match="permanent"):
+        retry_call(
+            operation,
+            attempts=3,
+            base_delay=0,
+            sleep=lambda _: None,
+            random_source=lambda: 0,
+        )
+
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("error_type", [TimeoutError, ConnectionError])
+def test_retry_call_retries_well_defined_connection_errors(error_type):
+    from evaluation.providers.base import retry_call
+
+    calls = []
+
+    def operation():
+        calls.append("called")
+        if len(calls) == 1:
+            raise error_type("temporary transport failure")
+        return "success"
+
+    assert retry_call(
+        operation,
+        attempts=2,
+        base_delay=0,
+        sleep=lambda _: None,
+        random_source=lambda: 0,
+    ) == "success"
+    assert len(calls) == 2
+
+
+def test_retry_call_does_not_retry_validation_or_response_errors():
+    from evaluation.providers.base import ProviderResponseError, retry_call
+
+    for error in (
+        ValueError("invalid request"),
+        ProviderResponseError("test-provider", "malformed response"),
+    ):
+        calls = []
+
+        def operation():
+            calls.append("called")
+            raise error
+
+        with pytest.raises(type(error), match=str(error)):
+            retry_call(
+                operation,
+                attempts=3,
+                base_delay=0,
+                sleep=lambda _: None,
+                random_source=lambda: 0,
+            )
+        assert len(calls) == 1
+
+
+def test_retry_call_honors_retry_after_header_and_bounded_jitter():
+    from evaluation.providers.base import retry_call
+
+    class RateLimitError(RuntimeError):
+        status_code = 429
+        response = SimpleNamespace(headers={"Retry-After": "3"})
+
+    calls = []
+    delays = []
+
+    def operation():
+        calls.append("called")
+        if len(calls) == 1:
+            raise RateLimitError("rate limited")
+        return "success"
+
+    assert retry_call(
+        operation,
+        attempts=2,
+        base_delay=0.25,
+        sleep=delays.append,
+        random_source=lambda: 1,
+        jitter=0.1,
+    ) == "success"
+    assert calls == ["called", "called"]
+    assert delays == pytest.approx([3.3])
+
+
+def test_provider_wraps_permanent_request_failure_once_with_context(
+    monkeypatch,
+):
+    from evaluation.providers import create_inference_provider
+    from evaluation.providers.base import ProviderRequestError
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "azure-openai")],
+    )
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        raise ValueError("invalid image detail")
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create),
+        )
+    )
+    provider = create_inference_provider(
+        "azure-openai",
+        client=client,
+        attempts=3,
+        base_delay=0,
+    )
+
+    with pytest.raises(
+        ProviderRequestError,
+        match="azure-openai.*invalid image detail",
+    ):
+        provider.generate("Question", [_frame()])
+
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("response", "expected"),
+    [
+        (SimpleNamespace(choices=[]), "choices"),
+        (
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=None,
+                            refusal=None,
+                        )
+                    )
+                ]
+            ),
+            "content",
+        ),
+        (
+            SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=None,
+                            refusal="blocked by safety policy",
+                        )
+                    )
+                ]
+            ),
+            "refus",
+        ),
+    ],
+)
+@pytest.mark.parametrize("provider_name", ["azure-openai", "openai", "together"])
+def test_chat_adapters_raise_controlled_response_errors(
+    monkeypatch,
+    provider_name,
+    response,
+    expected,
+):
+    from evaluation.providers import (
+        create_inference_provider,
+        create_judge_provider,
+    )
+    from evaluation.providers.base import ProviderResponseError
+
+    _clear_provider_env(monkeypatch)
+    operation = "inference" if provider_name == "azure-openai" else "judge"
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[(operation, provider_name)],
+    )
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return response
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=create),
+        )
+    )
+    if operation == "inference":
+        provider = create_inference_provider(provider_name, client=client)
+        invoke = lambda: provider.generate("Question", [_frame()])
+    else:
+        provider = create_judge_provider(provider_name, client=client)
+        invoke = lambda: provider.complete("System", "Prompt", False)
+
+    with pytest.raises(
+        ProviderResponseError,
+        match=f"{provider_name}.*{expected}",
+    ):
+        invoke()
+
+    assert len(calls) == 1
+
+
+def test_azure_wraps_malformed_answer_as_response_error(monkeypatch):
+    from evaluation.providers import create_inference_provider
+    from evaluation.providers.base import ProviderResponseError
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "azure-openai")],
+    )
+    client = _chat_client('```json\n{"Answer":\n```')
+    provider = create_inference_provider("azure-openai", client=client)
+
+    with pytest.raises(
+        ProviderResponseError,
+        match="azure-openai.*JSON",
+    ):
+        provider.generate("Question", [_frame()])
+
+    assert len(client.recorder.calls) == 1
+
+
+def test_anthropic_rejects_response_without_text_block(monkeypatch):
+    from evaluation.providers import create_inference_provider
+    from evaluation.providers.base import ProviderResponseError
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "anthropic")],
+    )
+    calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="tool_use")]
+        )
+
+    client = SimpleNamespace(
+        messages=SimpleNamespace(create=create),
+    )
+    provider = create_inference_provider("anthropic", client=client)
+
+    with pytest.raises(
+        ProviderResponseError,
+        match="anthropic.*text",
+    ):
+        provider.generate("Question", [_frame()])
+
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        SimpleNamespace(text=""),
+        SimpleNamespace(
+            text=None,
+            prompt_feedback=SimpleNamespace(block_reason="SAFETY"),
+        ),
+    ],
+)
+def test_gemini_rejects_empty_or_safety_blocked_response(
+    monkeypatch,
+    response,
+):
+    from evaluation.providers import create_inference_provider
+    from evaluation.providers.base import ProviderResponseError
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "gemini")],
+    )
+    calls = []
+
+    def generate_content(**kwargs):
+        calls.append(kwargs)
+        return response
+
+    client = SimpleNamespace(
+        models=SimpleNamespace(generate_content=generate_content),
+    )
+    provider = create_inference_provider("gemini", client=client)
+
+    with pytest.raises(
+        ProviderResponseError,
+        match="gemini",
+    ):
+        provider.generate("Question", [_frame()])
+
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"output": {"choices": []}},
+        {
+            "output": {
+                "choices": [
+                    {"message": {"content": []}}
+                ]
+            }
+        },
+    ],
+)
+def test_qwen_rejects_missing_choices_or_content(monkeypatch, response):
+    from evaluation.providers import create_inference_provider
+    from evaluation.providers.base import ProviderResponseError
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[("inference", "qwen")],
+    )
+    calls = []
+
+    def call(**kwargs):
+        calls.append(kwargs)
+        return response
+
+    client = SimpleNamespace(
+        MultiModalConversation=SimpleNamespace(call=call),
+    )
+    provider = create_inference_provider("qwen", client=client)
+
+    with pytest.raises(
+        ProviderResponseError,
+        match="qwen",
+    ):
+        provider.generate("Question", [_frame()])
+
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("operation", "provider_name", "module_name", "constructor_name"),
+    [
+        ("inference", "azure-openai", "openai", "AzureOpenAI"),
+        ("judge", "openai", "openai", "OpenAI"),
+        ("inference", "anthropic", "anthropic", "Anthropic"),
+        ("judge", "together", "together", "Together"),
+    ],
+)
+def test_sdk_client_construction_disables_internal_retries(
+    monkeypatch,
+    operation,
+    provider_name,
+    module_name,
+    constructor_name,
+):
+    from evaluation.providers import (
+        create_inference_provider,
+        create_judge_provider,
+    )
+
+    _clear_provider_env(monkeypatch)
+    _set_env(
+        monkeypatch,
+        REQUIRED_ENV_BY_PROVIDER[(operation, provider_name)],
+    )
+    constructor_calls = []
+
+    def constructor(**kwargs):
+        constructor_calls.append(kwargs)
+        return object()
+
+    fake_module = SimpleNamespace()
+    setattr(fake_module, constructor_name, constructor)
+    monkeypatch.setitem(sys.modules, module_name, fake_module)
+    factory = (
+        create_inference_provider
+        if operation == "inference"
+        else create_judge_provider
+    )
+    provider = factory(provider_name)
+
+    provider._get_client()
+
+    assert constructor_calls[0]["max_retries"] == 0
 
 
 @pytest.mark.parametrize(
