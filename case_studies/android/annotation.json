@@ -1,0 +1,102 @@
+{
+  "id": "com.andi.alquran.id",
+  "video_path": "example.mp4",
+  "video_count": 9,
+  "Sequential-QA": {
+    "Question": "After selecting a specific Surah from the list, what does the user do next before a pop-up notification appears?",
+    "Answer": "After selecting a Surah, the user views the verses in Arabic and their Indonesian translation. Then, the user returns to the Surah list before a pop-up notification appears."
+  },
+  "Prediction": {
+    "Question": "What would likely be the next step in the app interface after the user is directed to the search page?",
+    "Answer": "After being directed to the search page, the likely next step would be for the user to enter a keyword into the search bar to find a translation or meaning within the app's database."
+  },
+  "Conversation": {
+    "User 1": "I need to find a specific verse in the Quran. How do I search for it?",
+    "Assistant 1": "You can search for a specific verse by tapping on the 'Pencarian' option in the main menu, which will take you to a search page where you can enter a keyword.",
+    "User 2": "I see. And how do I get back to the main menu from the search page?",
+    "Assistant 2": "To return to the main menu from the search page, you can tap on the back arrow located at the top left corner of the screen."
+  },
+  "Reasoning": {
+    "Question": "If the user wants to read the verses of Surah 'Al-Infitar', what should they do after launching the app?",
+    "Options": [
+      "A. Go to the settings and select 'Al-Infitar'.",
+      "B. Scroll through the Surah list and select 'Al-Infitar'.",
+      "C. Choose the 'Pencarian' option and type 'Al-Infitar'.",
+      "D. Wait for a pop-up and select 'Al-Infitar' from there."
+    ],
+    "Correct Answer": "B. Scroll through the Surah list and select 'Al-Infitar'."
+  },
+  "Description1": "The video starts with a view of a mobile app interface, specifically an Al-Qur'an Indonesia app with a list of Surahs. A user scrolls through the Surah list, selects a specific Surah, and the view transitions to a page displaying the verses in Arabic and their Indonesian translation. The user then returns to the Surah list. Following this, a pop-up appears indicating a configuration process that takes approximately 10-20 seconds. After the configuration, another pop-up notifies of an available update from the Google Play Store, which the user can accept or postpone. The user dismisses this pop-up. The main menu is accessed, showing options such as 'Baca Quran', 'Terakhir Baca', 'Pencarian', 'Jadwal Sholat', and 'Pengaturan'. The user selects the 'Pencarian' option, which leads to a search page. Here, the user is instructed to enter a keyword to search in the translation database. Finally, the user navigates back to the main menu and then to the Surah list once more.",
+  "Description2": "The video begins by displaying a mobile GUI with a list of chapters from the Quran in Indonesian. Each chapter has a downward arrow suggesting expandable content. As the video progresses, a popup appears with a loading icon and a message in Indonesian indicating a configuration is in progress, which takes about 10-20 seconds. After this, another popup appears notifying of a new update available on the Google Play Store with options to update or postpone. Subsequently, the screen shows a search interface where users can input keywords for searching within the Quran's translated database. The main menu is then accessed, with options such as 'Read Quran', 'Last Read', 'Search', 'Prayer Schedule', and 'Settings'. The GUI transitions back to the list of chapters, and a specific chapter, At-Takwir, is selected. The video then displays the verses of this chapter, both in Arabic and Indonesian translation, with an option to listen to the audio. Finally, it navigates back to the list of chapters.",
+  "Caption": "Navigating through a Quran app's GUI, interacting with chapter lists, update notifications, search function, and viewing specific verses with translations.",
+  "static QA": {
+    "Question": "What options are available in the main menu of the mobile Quran application?",
+    "Answer": "The main menu of the mobile Quran application provides several options for the user to choose from. These include 'BACA QURAN' (Read Quran) for accessing the chapters to read, 'TERAKHIR BACA' (Last Read) to resume reading from where the user left off last time, 'PENCARIAN' (Search) to search the Quran's database for specific keywords, 'JADWAL SHOLAT' (Prayer Schedule) to check the prayer times, and 'PENGATURAN' (Settings) to modify app settings. This menu provides a simple and efficient way for users to navigate through the app's features and customize their reading and learning experience."
+  },
+  "MCQA": {
+    "Question": "What happens after the user is notified about the new update available on the Google Play Store?",
+    "Options": {
+      "A": "The app closes automatically.",
+      "B": "The search interface is displayed.",
+      "C": "The list of chapters disappears.",
+      "D": "An advertisement for shopping deals is shown."
+    },
+    "Correct Answer": "[[B]] The search interface is displayed."
+  },
+  "keyframes": [
+    {
+      "frame": 16,
+      "sub_goal": "A user is prompted with an update notification on a GUI interface, intending to accept the update by clicking 'YA' or pressing 'Enter' on the keyboard.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 33,
+      "sub_goal": "User intends to accept an app update on a mobile GUI by tapping 'YES' on the update notification overlay.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 50,
+      "sub_goal": "Mobile search interface instructing user to input keyword and click search to find translations, with example 'surga'.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 67,
+      "sub_goal": "Mobile app interface with religious menu options, ready for user selection.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 84,
+      "sub_goal": "User interacting with 'Al-Qur'an Indonesia' mobile app to navigate its features, likely to tap a button for further action.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 101,
+      "sub_goal": "User navigating to Surah 'Al-Insyiqaaq' in the 'Al-Qur'an Indonesia' mobile app interface.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 118,
+      "sub_goal": "User bookmarking Surah 'Al-Buruj' in the 'Al-Qur'an Indonesia' mobile application.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 135,
+      "sub_goal": "A user is viewing a Quran application on a mobile device and intends to navigate to the next page by tapping the right navigation arrow.",
+      "mouse": null,
+      "keyboard": null
+    },
+    {
+      "frame": 152,
+      "sub_goal": "User selecting Surah 'Al-Infitar' in the 'Al-Qur'an Indonesia' mobile app to view more details.",
+      "mouse": null,
+      "keyboard": null
+    }
+  ]
+}

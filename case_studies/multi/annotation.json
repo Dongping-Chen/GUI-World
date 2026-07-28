@@ -1,0 +1,111 @@
+{
+  "system": "Windows",
+  "multi": true,
+  "app": [
+    "steam",
+    "obs",
+    "edge"
+  ],
+  "region": "partial",
+  "goal": "After starting the recording, play around on the computer, then search for Office in Edge.",
+  "keyframes": [
+    {
+      "frame": 60,
+      "sub_goal": "Clicked on the back page, obscuring part of the obs.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 106,
+      "sub_goal": "Click on obs, obs returns to the top layer.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 141,
+      "sub_goal": "Click on the minimize button of the OBS software, OBS has been minimized.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 170,
+      "sub_goal": "Click and drag the window of Steam to move it to the center of the screen.",
+      "mouse": "drag",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 206,
+      "sub_goal": "Minimize steam as well.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 247,
+      "sub_goal": "Open a new webpage in the navigation bar of Edge.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 313,
+      "sub_goal": "Enter \"office\" in the search bar to search for office.",
+      "mouse": "none",
+      "keyboard": "input",
+      "keyboardOperation": "office"
+    },
+    {
+      "frame": 394,
+      "sub_goal": "Jumped to the Bing search office interface and successfully searched.",
+      "mouse": "none",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    }
+  ],
+  "video_path": "example.mp4",
+  "Description1": "The video begins with a Windows desktop displaying multiple open applications, including Steam, OBS Studio, and a web browser with NVIDIA's website loaded. The user starts by clicking on the back page of the browser, which partially obscures the OBS window. Then, the user clicks on the OBS application, bringing it to the forefront. The user minimizes OBS, followed by dragging the Steam window to the center of the screen and minimizing it as well. A new web page is opened in the Edge browser's navigation bar, and the user types 'office' into the search bar. The browser navigates to the Bing search interface, and 'office' is successfully searched.",
+  "Caption": "Navigating and Managing Multiple Applications on Windows Including Steam, OBS Studio, and Edge Browser",
+  "static QA": {
+    "Question": "Which web browser is used in the video and which website is prominently featured before the search for 'office'?",
+    "Answer": "The web browser used in the video is Microsoft Edge. The prominently featured website before the search for 'office' is NVIDIA's official website where the 'Download Drivers' page is displayed."
+  },
+  "MCQA": {
+    "Question": "What action is taken after the OBS application is minimized?",
+    "Options": [
+      "A. The Steam window is closed.",
+      "B. The Steam window is moved to the center of the screen and minimized.",
+      "C. The Edge browser is closed.",
+      "D. A file is opened from the desktop."
+    ],
+    "Correct Answer": "[[B]] The Steam window is moved to the center of the screen and minimized."
+  },
+  "Description2": "The video shows a Windows desktop with several application windows open, including Steam, OBS, and Edge. Initially, the OBS window is partially covering the Edge browser. The user clicks on the Edge browser, bringing it to the foreground, and then minimizes the OBS window, clearing the view. Next, the user moves the Steam window to the center of the screen and minimizes it as well. Afterward, the user opens a new tab in Edge and enters 'office' into the search bar, which leads to a Bing search results page for 'office'. The video ends with the user on the Bing search page with 'office' results displayed.",
+  "Sequential-QA": {
+    "Question": "After moving the Steam window to the center, what did the user do next in the Edge browser?",
+    "Answer": "After moving the Steam window to the center, the user minimized the Steam application. Then, they opened a new tab in the Edge browser and entered 'office' into the search bar, which led them to the Bing search results page for 'office'."
+  },
+  "Prediction": {
+    "Question": "What would be the likely next action the user performs after searching for 'office' on Bing?",
+    "Answer": "The likely next action the user would perform after searching for 'office' on Bing would be to click on one of the search results to find more information or to visit the Microsoft Office website to purchase or learn more about the office suite."
+  },
+  "Conversation": {
+    "User 1": "Can you minimize the OBS application for a better view of the browser?",
+    "Assistant 1": "Certainly, the OBS application has been minimized, providing a clear view of the Edge browser.",
+    "User 2": "Great, now can you search for Microsoft Office in the Edge browser?",
+    "Assistant 2": "Of course, a new tab has been opened in the Edge browser and 'office' has been entered into the search bar. The Bing search results for 'office' are now displayed."
+  },
+  "Reasoning": {
+    "Question": "If the user needs to record gameplay footage next, which application should they interact with and what would be their first step?",
+    "Options": [
+      "A. They should open the Steam application and click on the 'STORE' tab.",
+      "B. They should open the Edge browser and search for 'game recording software'.",
+      "C. They should reopen the OBS application and click on the 'Start Recording' button.",
+      "D. They should access the Windows Start menu and search for the 'Camera' app."
+    ],
+    "Correct Answer": "C"
+  }
+}

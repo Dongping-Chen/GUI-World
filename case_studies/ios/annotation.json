@@ -1,0 +1,102 @@
+{
+  "system": "macOS",
+  "multi": false,
+  "app": [
+    "Khan Academy"
+  ],
+  "region": "full",
+  "goal": "Browse through the various courses under the computer category.",
+  "keyframes": [
+    {
+      "frame": 109,
+      "sub_goal": "Scroll down to browse this page.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 146,
+      "sub_goal": "Scroll to the bottom",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 214,
+      "sub_goal": "Return to the previous screen.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 287,
+      "sub_goal": "Click to enter the computer science theory interface, currently loading.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 326,
+      "sub_goal": "The content has loaded.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 443,
+      "sub_goal": "Returned to the previous page.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 567,
+      "sub_goal": "Clicked on code.org",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    }
+  ],
+  "video_path": "example.mp4",
+  "Description1": "The video demonstrates a user navigating through the Khan Academy mobile application under the 'Computing' category. Initially, the user scrolls through the 'Computers and the Internet' section, viewing topics such as 'Digital information,' 'Bits and bytes,' 'The Internet,' and 'Online data security.' The user then scrolls to the bottom, revealing the 'Computing innovations' section and the 'Take Course Challenge' button. Subsequently, the user returns to the previous screen, displaying other computing sections like 'AP®/College Computer Science Principles' and 'Computer science theory.' The user clicks to enter the 'Computer science theory' interface; the content is loading. After the content has loaded, revealing topics like 'Cryptography' and 'Information theory,' the user returns to the previous page and clicks on 'Code.org.'",
+  "Caption": "Navigating through computing courses on Khan Academy's mobile application, viewing sections, and attempting to enter 'Computer science theory.'",
+  "static QA": {
+    "Question": "Which topic appears directly below 'Online data security' in the 'Computers and the Internet' section before scrolling down?",
+    "Answer": "Before scrolling down, the topic that appears directly below 'Online data security' is 'Computing innovations.' This can be confirmed from the initial frames of the video where the 'Computing innovations' section is partially visible, indicating that it is the next topic in the sequence after 'Online data security.' As the video progresses and the user scrolls down, the full 'Computing innovations' section comes into view, affirming its position in the GUI layout."
+  },
+  "MCQA": {
+    "Question": "What action does the user take after viewing the 'Computing innovations' section?",
+    "Options": [
+      "A) Scrolls up to view 'Digital information' again.",
+      "B) Returns to the previous screen showing different computing sections.",
+      "C) Clicks on the 'Take Course Challenge' button.",
+      "D) Taps on the 'Explore' tab at the bottom of the screen."
+    ],
+    "Correct Answer": "[[B]] Returns to the previous screen showing different computing sections."
+  },
+  "Description2": "The video begins with the user viewing the 'Computers and the Internet' course section within the Khan Academy application. The user scrolls through various subsections such as 'Digital information,' 'Computers,' 'The Internet,' and 'Online data security,' each with a list of topics and a status of possible mastery points. The user continues to scroll down to the 'Computing innovations' section and then further down to a 'Course challenge' prompt. The user then scrolls back up, revealing previously seen sections in reverse order. The user eventually navigates back to the main 'Computing' category screen, showing an overview of all computing-related courses. From there, the user selects 'Computer science theory,' which briefly loads before displaying topics within that course such as 'Cryptography' and 'Information theory.' Following this, the user returns to the main 'Computing' category screen.",
+  "Sequential-QA": {
+    "Question": "What action does the user take after scrolling through the 'Online data security' section, and what is displayed as a result of this action?",
+    "Answer": "After scrolling through the 'Online data security' section, the user scrolls down to the 'Computing innovations' section. As a result of this action, topics such as 'Communication innovations,' 'Collaboration innovations,' 'Crowdsourcing innovations,' and 'Monitoring innovations' are displayed, followed by a 'Course challenge' prompt."
+  },
+  "Prediction": {
+    "Question": "If the user were to select the 'Cryptography' section after it was displayed, what kind of content could you predict will be shown next?",
+    "Answer": "If the user selects the 'Cryptography' section, one could predict that the next content shown would be detailed topics under Cryptography, such as 'Ancient cryptography,' 'Ciphers,' 'Cryptography challenge 101,' 'Modern cryptography,' 'Modular arithmetic,' 'Primality test,' and 'Randomized algorithms,' along with the status of possible mastery points for that section."
+  },
+  "Conversation": {
+    "User 1": "Can you take me to the section about user authentication methods?",
+    "Assistant 1": "Sure, you will need to scroll down the 'Computers and the Internet' course section until you reach the 'Online data security' subsection, where you will find the topic 'User authentication methods.'",
+    "User 2": "I scrolled too far down and reached the course challenge. How do I find 'User authentication methods' from here?",
+    "Assistant 2": "No problem, you'll need to scroll back up past the 'Computing innovations' section until you see the 'Online data security' subsection again. 'User authentication methods' is listed there among other topics."
+  },
+  "Reasoning": {
+    "Question": "After browsing through the course topics in 'Computers and the Internet,' the user returns to a broader category view. Based on this behavior, what could be the reason for the user returning to the broader category view?",
+    "Options": [
+      "A. The user wants to take a course challenge.",
+      "B. The user is looking for a different computing-related course.",
+      "C. The application automatically redirected the user.",
+      "D. The user intends to log out of the Khan Academy application."
+    ],
+    "Correct Answer": "B"
+  }
+}

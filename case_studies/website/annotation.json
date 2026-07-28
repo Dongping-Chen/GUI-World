@@ -1,0 +1,89 @@
+{
+  "system": "Windows",
+  "multi": false,
+  "app": [
+    "google.com"
+  ],
+  "region": "full",
+  "goal": "User views new search results, then clears previous search content.",
+  "keyframes": [
+    {
+      "frame": 91,
+      "sub_goal": "Move the mouse to a search result.",
+      "mouse": "hover",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 133,
+      "sub_goal": "Scroll down with the mouse.",
+      "mouse": "scroll",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 171,
+      "sub_goal": "Scroll up with the mouse.",
+      "mouse": "scroll",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 240,
+      "sub_goal": "Move the mouse to the search bar.",
+      "mouse": "hover",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 273,
+      "sub_goal": "Click the \"X\" to clear.",
+      "mouse": "click",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    }
+  ],
+  "video_path": "example.mp4",
+  "Description1": "The video begins with the Google search results page visible on a Windows system browser, displaying the query 'is oatmeal a healthy breakfast'. The mouse cursor scrolls down the page, revealing additional search results, and the 'People also ask' section with related questions. The user then scrolls back up to the top of the page. Next, the cursor moves to the search bar, and the 'X' button is clicked to clear the previous search content, leaving an empty search bar. The browser's suggested searches drop-down menu appears with various related search queries. Finally, the video fades to black, indicating the end of the sequence.",
+  "Caption": "Navigating Google Search Results and Clearing the Search Query on a Windows System Browser",
+  "static QA": {
+    "Question": "What feature snippet is displayed at the top of the Google search results for the query 'is oatmeal a healthy breakfast'?",
+    "Answer": "The featured snippet at the top of the Google search results for the query 'is oatmeal a healthy breakfast' is from the Harvard T.H. Chan School of Public Health website. It includes an excerpt stating 'Whether it's steel-cut or rolled, quick-cooking or instant, oatmeal is good for you, experts say—with a few caveats. Oatmeal is rich in fiber, which promotes fullness, eases the insulin response, and benefits gut health. It's also a source of vitamins B and E, and minerals such as magnesium.' This snippet provides a concise summary of the health benefits of oatmeal, according to experts, highlighting its nutritional value and potential impact on fullness and insulin response. The presence of this snippet offers a quick and authoritative answer to the user's query, showcasing Google's ability to extract relevant information from web pages and present it prominently for ease of access."
+  },
+  "MCQA": {
+    "Question": "What action did the user take after reviewing the search results?",
+    "Options": [
+      "A. The user clicked on one of the search results.",
+      "B. The user scrolled through the 'People also ask' section.",
+      "C. The user cleared the search content in the search bar.",
+      "D. The user navigated to a different website."
+    ],
+    "Correct Answer": "[[C]] The user cleared the search content in the search bar."
+  },
+  "Description2": "The video shows a sequence of actions on a Google search results page within a web browser on a Windows system. Initially, the mouse cursor moves over a search result discussing the health benefits of oatmeal. Next, the user scrolls down, revealing a 'People also ask' section with questions related to oatmeal and a 'Videos' section showcasing related content. Subsequently, the user scrolls back up to the original position, highlighting the same search result about oatmeal's health benefits. Finally, the user moves the cursor to the search bar and clicks the 'X' to clear the previous search content, resulting in a blank search bar with suggestions and related searches listed below it. The screen then goes black, indicating the end of the video.",
+  "Sequential-QA": {
+    "Question": "After reading about oatmeal's health benefits, what section of the page did the user explore next and did they return to read more about the health benefits afterward?",
+    "Answer": "After reading about the health benefits of oatmeal, the user scrolled down to explore the 'People also ask' section and the 'Videos' section related to oatmeal. Following this, the user scrolled back up to revisit the original search result that discussed the health benefits of oatmeal."
+  },
+  "Prediction": {
+    "Question": "Based on the sequence of events, what action is the user likely to perform after clearing the search bar?",
+    "Answer": "After clearing the search bar, the user is likely to type in a new search query or select one of the suggested searches that appear below the search bar."
+  },
+  "Conversation": {
+    "User 1": "I want to find more articles on oatmeal's health benefits. Can you scroll back up?",
+    "Assistant 1": "I've scrolled back up and the article on oatmeal's health benefits from the Harvard T.H. Chan School of Public Health is highlighted again.",
+    "User 2": "Great, now can you clear the search and look for something else?",
+    "Assistant 2": "The search content has been cleared, and the search bar is now empty, showing a list of related searches and previous search history suggestions for a new query."
+  },
+  "Reasoning": {
+    "Question": "If the user wants to perform a new search after clearing the search bar, which of the following actions would they need to take next?",
+    "Options": [
+      "A. Scroll down to view more search results",
+      "B. Type a new query into the search bar",
+      "C. Click on one of the 'People also ask' questions",
+      "D. Close the browser window"
+    ],
+    "Correct Answer": "B"
+  },
+  "new_video_path": "4.1-4.9-videos/Website/431.mp4"
+}

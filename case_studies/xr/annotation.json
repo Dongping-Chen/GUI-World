@@ -1,0 +1,89 @@
+{
+  "system": "Windows",
+  "multi": false,
+  "app": [
+    "Apple Vision Pro"
+  ],
+  "region": "partial",
+  "goal": "Open various pages of the browser.",
+  "keyframes": [
+    {
+      "frame": 30,
+      "sub_goal": "Turn your head to the right to view the right side page.",
+      "mouse": "none",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 53,
+      "sub_goal": "Look at the dot at the bottom of the page, pinch with both hands to exit the page.",
+      "mouse": "none",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 133,
+      "sub_goal": "Pinch with both hands and fingers, move towards the middle to expand the browser's various pages.",
+      "mouse": "none",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 218,
+      "sub_goal": "Turn your head to the right to view the right side of the page.",
+      "mouse": "none",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    },
+    {
+      "frame": 250,
+      "sub_goal": "Turn your head to the left to view the left side page.",
+      "mouse": "none",
+      "keyboard": "none",
+      "keyboardOperation": ""
+    }
+  ],
+  "video_path": "example.mp4",
+  "Description1": "The video showcases a user navigating through various pages within the Apple Vision Pro browser on a Windows system. Initially, the browser displays the start page with Favorites and Reading List. The user then turns their head to the right, which triggers the transition to view a webpage on the right side. Following this, the user pinches with both hands to exit the page and then pinches with both hands and fingers moving towards the middle to expand the browser's various pages. This reveals multiple open browser tabs side by side. The user continues to turn their head left and right to view different pages on each side. Lastly, the user selects and expands a specific tab to fill the screen, displaying its content.",
+  "Caption": "Navigating through multiple browser pages using head movement and hand gestures in Apple Vision Pro on Windows",
+  "static QA": {
+    "Question": "What is the main category listed under the Favorites section on the browser's start page?",
+    "Answer": "The main category listed under the Favorites section on the browser's start page is 'Perplexity', denoted by a unique icon, followed by other favorites like Instagram and various websites."
+  },
+  "MCQA": {
+    "Question": "How does the user switch between different open tabs in the Apple Vision Pro browser?",
+    "Options": [
+      "A. Using keyboard shortcuts",
+      "B. Turning their head left and right",
+      "C. Scrolling with a mouse",
+      "D. Typing the tab number"
+    ],
+    "Correct Answer": "[[B]] Turning their head left and right"
+  },
+  "Description2": "The video starts with a full-screen view of a browser interface titled 'Apple Vision Pro' displaying various website thumbnails and bookmarks. The user then turns their head to the right, causing the right side of the browser to come into view. Next, the user looks at a dot at the bottom of the page and pinches with both hands, which causes the browser to exit the full-screen view and shrink to a smaller, windowed mode. The user then performs a pinching motion with both hands, bringing the fingers towards the middle, which causes the browser's various pages to expand, giving an overview of multiple open tabs. The user again turns their head to the right to view the right side page and then to the left to view the left side page. Throughout the video, the GUI elements such as tabs, the address bar, and website thumbnails respond dynamically to the user's head movements and hand gestures.",
+  "Sequential-QA": {
+    "Question": "What action did the user take immediately after turning their head to the right to view the right side page?",
+    "Answer": "After turning their head to the right to view the right side page, the user looked at a dot at the bottom of the page and pinched with both hands, which caused the browser to exit full-screen mode and shrink to a smaller windowed interface."
+  },
+  "Prediction": {
+    "Question": "If the user pinches with both hands and moves their fingers towards the middle after the browser shrinks to a smaller window, what will happen next?",
+    "Answer": "If the user pinches with both hands and moves their fingers towards the middle after the browser shrinks, the action will cause the browser's various pages to expand, providing an overview of multiple open tabs."
+  },
+  "Conversation": {
+    "User 1": "How do I view all the pages I have open in the browser?",
+    "Assistant 1": "You can view all the open pages by pinching with both hands and moving your fingers towards the middle. This will expand the browser and show an overview of all the open tabs.",
+    "User 2": "Great, and how can I exit this overview?",
+    "Assistant 2": "To exit the overview of open pages, you can look at the dot at the bottom of the page and pinch with both hands. This will exit the overview and return you to the individual page view."
+  },
+  "Reasoning": {
+    "Question": "How can the user access the options to open a new tab or window from the current state?",
+    "Options": [
+      "A. Turn their head to the left and select the plus sign.",
+      "B. Swipe left on the touchpad.",
+      "C. Turn their head to the right and select the 'Done' button.",
+      "D. Pinch with both hands to exit the current view and access the toolbar."
+    ],
+    "Correct Answer": "D"
+  },
+  "new_video_path": "4.1-4.9-videos/Youtube/217.mp4"
+}

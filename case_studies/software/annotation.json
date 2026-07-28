@@ -1,0 +1,89 @@
+{
+  "system": "Windows",
+  "multi": false,
+  "app": [
+    "Python"
+  ],
+  "region": "partial",
+  "goal": "Run Python code, execute print(\"Hello World\")",
+  "keyframes": [
+    {
+      "frame": 145,
+      "sub_goal": "Enter \"print*\"",
+      "mouse": "none",
+      "keyboard": "input",
+      "keyboardOperation": "print*"
+    },
+    {
+      "frame": 124,
+      "sub_goal": "Delete multiple input *",
+      "mouse": "none",
+      "keyboard": "delete",
+      "keyboardOperation": "delete"
+    },
+    {
+      "frame": 181,
+      "sub_goal": "Input (\"\")",
+      "mouse": "none",
+      "keyboard": "input",
+      "keyboardOperation": "(\"\")"
+    },
+    {
+      "frame": 229,
+      "sub_goal": "Move the editing position forward by one.",
+      "mouse": "none",
+      "keyboard": "input",
+      "keyboardOperation": "左键"
+    },
+    {
+      "frame": 308,
+      "sub_goal": "Input \"Hello World\"",
+      "mouse": "none",
+      "keyboard": "input",
+      "keyboardOperation": "Hello World"
+    }
+  ],
+  "video_path": "example.mp4",
+  "Description1": "The video shows a Python 3.7.4 Shell window on a Windows system. The user begins by typing the 'print' function followed by a pair of parentheses. Inside the parentheses, the user types a string, 'Hello World', which is enclosed in double quotes. Upon pressing Enter, the Python Shell executes the command and outputs the text 'Hello World' below the command line, indicating that the code ran successfully without any errors.",
+  "Caption": "Executing the print command in Python Shell to display 'Hello World'",
+  "static QA": {
+    "Question": "What version of Python is shown running in the video?",
+    "Answer": "The version of Python running in the video is Python 3.7.4, as indicated by the text at the top of the Python Shell window."
+  },
+  "MCQA": {
+    "Question": "What operation does the user perform after typing the print command?",
+    "Options": [
+      "A. The user saves the file.",
+      "B. The user compiles the code.",
+      "C. The user executes the print command.",
+      "D. The user closes the Python Shell."
+    ],
+    "Correct Answer": "[[C]] The user executes the print command."
+  },
+  "Description2": "The video shows a sequence of a user interacting with the Python Shell on a Windows system. Initially, the shell is open and waiting for input. The user begins by typing 'print*' and then corrects the typo by removing the asterisk, typing 'print'. They then type two quotation marks to prepare for a string input. Subsequently, the user moves the cursor between the quotation marks and types 'Hello World' to complete the 'print(\"Hello World\")' command. After pressing enter, the shell executes the command, and the phrase 'Hello World' is outputted below the command prompt.",
+  "Sequential-QA": {
+    "Question": "Can you describe the sequence of actions the user took to correct the command and output 'Hello World'?",
+    "Answer": "Certainly. Initially, the user typed 'print*' but realized the asterisk was a mistake. They deleted the asterisk to correct the command to 'print'. Next, they entered two quotation marks to indicate the start of a string. The user then placed the cursor between the quotation marks and typed the string 'Hello World'. Finally, upon pressing enter, the Python Shell executed the command and displayed the output 'Hello World' beneath the command prompt."
+  },
+  "Prediction": {
+    "Question": "What would be the expected GUI change if the user were to type another command after the 'Hello World' output?",
+    "Answer": "If the user were to type another command after the 'Hello World' output, the expected GUI change would be that the command prompt indicator '>>>' would appear on a new line below the 'Hello World' output, signaling readiness for the next command input. Any subsequent command typed by the user would appear after this new prompt, awaiting execution."
+  },
+  "Conversation": {
+    "User 1": "I want to print a different message in Python. How can I do that?",
+    "Assistant 1": "To print a different message, you can simply type 'print(\"Your Message Here\")' where 'Your Message Here' is the text you wish to print. Make sure you enclose your message in quotation marks and hit enter to execute the command.",
+    "User 2": "What if I want to print 'Goodbye, World' instead?",
+    "Assistant 2": "To print 'Goodbye, World', you would type 'print(\"Goodbye, World\")' and press enter. The Python Shell will execute the command and display 'Goodbye, World' as the output below the command prompt."
+  },
+  "Reasoning": {
+    "Question": "What command did the user execute to get the output in the Python Shell?",
+    "Options": [
+      "A. print(Hello World)",
+      "B. print(\"Hello World)",
+      "C. print(\"Hello World\")",
+      "D. echo(\"Hello World\")"
+    ],
+    "Correct Answer": "C"
+  },
+  "new_video_path": "4.1-4.9-videos/Youtube/56.mp4"
+}
