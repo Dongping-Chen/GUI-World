@@ -45,12 +45,16 @@ Scenario directory names are normalized to lowercase. Each directory retains
 its `annotation.json`, example video, and extracted frame images. The misspelled
 `multi/emample.mp4` filename becomes `multi/example.mp4`.
 
-The submitted Android and XR case-study directories do not contain their example
-videos. Their annotations match `android/58.mp4` and `XR/151.mp4` in the
-GUI-World Hugging Face dataset, respectively. Those two files are retrieved
-individually during migration and verified against the submitted frame images;
-the full benchmark dataset is not downloaded. Every copied annotation replaces
-its stale machine-specific `video_path` with the relative value `example.mp4`.
+Four case-study videos come from the canonical GUI-World Hugging Face dataset:
+`android/58.mp4`, `IOS/176.mp4`, `software/172.mp4`, and `XR/151.mp4`. Android
+and XR require missing source videos to be restored. The submitted software
+video is actually identical to `XR/151.mp4`, and the submitted iOS video does
+not align with its annotated PNG frames, so both are replaced with their
+scenario's official videos as well. Only the submitted multi and website videos
+are retained. All submitted PNGs and annotation content are preserved, and
+every annotated frame is decoded from the selected video and checked for
+alignment in the asset test. Every copied annotation replaces its stale
+machine-specific `video_path` with the relative value `example.mp4`.
 
 Evaluation code becomes an importable top-level `evaluation/` package:
 
@@ -274,7 +278,9 @@ Unit tests cover:
 - free-form and multiple-choice judge routing.
 
 An asset-integrity test verifies that all six case-study directories contain a
-parseable annotation, an example video, and the annotated frame images.
+parseable annotation, an example video, and every retained annotated PNG. It
+decodes all annotated video frames, requires equal image dimensions, and checks
+normalized grayscale correlation against the PNGs.
 
 Static validation compiles the package and runs the complete pytest suite.
 

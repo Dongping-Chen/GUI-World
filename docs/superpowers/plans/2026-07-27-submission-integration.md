@@ -180,24 +180,38 @@ test -z "$(rg -l '/media/sata2' case_studies)"
 
 Expected: every `diff` is empty and the final `test` exits 0.
 
-- [ ] **Step 4: Recover the two missing videos**
+- [ ] **Step 4: Select the six verified videos**
 
-Download only, with redirects and bounded retries:
+Retain only the submitted multi and website videos. Download the four official
+scenario videos individually, with redirects and bounded retries:
 
 ```bash
 curl -L --fail --retry 5 \
   https://huggingface.co/datasets/ONE-Lab/GUI-World/resolve/main/android/58.mp4 \
   -o case_studies/android/example.mp4
 curl -L --fail --retry 5 \
+  https://huggingface.co/datasets/ONE-Lab/GUI-World/resolve/main/IOS/176.mp4 \
+  -o case_studies/ios/example.mp4
+curl -L --fail --retry 5 \
+  https://huggingface.co/datasets/ONE-Lab/GUI-World/resolve/main/software/172.mp4 \
+  -o case_studies/software/example.mp4
+curl -L --fail --retry 5 \
   https://huggingface.co/datasets/ONE-Lab/GUI-World/resolve/main/XR/151.mp4 \
   -o case_studies/xr/example.mp4
 ```
 
-Extend the asset test to decode every annotated frame from every example video.
-Require the decoded frame and submitted PNG to have equal dimensions and a
-grayscale normalized correlation of at least `0.95`. This automated all-frame
-similarity check verifies both recovered videos, not just their dimensions.
-Visually inspect at least one recovered frame per video as an additional check.
+Android and XR do not have usable submitted source videos. The submitted
+software video is byte-identical to official `XR/151.mp4`, rather than the
+software annotation. The submitted iOS video does not align with its annotated
+PNG frames. Therefore `software/172.mp4` and `IOS/176.mp4` replace those two
+submitted videos as well.
+
+Extend the asset test to decode every annotated frame from all six example
+videos. Require the decoded frame and retained PNG to have equal dimensions and
+a grayscale normalized correlation of at least `0.95`. This automated
+all-frame similarity check verifies the complete video selection, not just file
+presence or dimensions. Visually inspect at least one frame from each of the
+four official replacements as an additional check.
 
 - [ ] **Step 5: Run the asset test**
 
@@ -668,7 +682,8 @@ git commit -m "feat(evaluation): add LLM judge CLI"
 Document:
 
 - Python environment creation and installation;
-- Hugging Face benchmark/video download commands;
+- canonical `ONE-Lab/GUI-World` download commands and benchmark paths under
+  `Annotation/benchmark/`;
 - provider operation matrix and environment variables;
 - linspace and annotated inference commands;
 - judge commands;
@@ -709,10 +724,11 @@ Run a read-only semantic comparison that:
 - compares SHA-256 for every PNG;
 - removes only top-level `video_path` from both parsed annotation dictionaries
   and asserts the remaining structures are equal;
-- compares SHA-256 for the four submitted videos, accounting for the corrected
-  `multi/example.mp4` name;
-- asserts Android and XR are precisely the two videos recovered from Hugging
-  Face.
+- compares the submitted and destination video hashes only for multi and
+  website, accounting for the corrected `multi/example.mp4` name;
+- checks the four official Android, iOS, software, and XR videos against fixed
+  SHA-256 values captured from the verified migration;
+- reruns the all-keyframe alignment test for every case study.
 
 The command must exit nonzero on the first mismatch and print the mismatched
 path. Rerun `python -m pytest evaluation/tests/test_case_studies.py -q` before
@@ -736,16 +752,32 @@ mapping = {
     "website": "website",
     "XR": "xr",
 }
-source_videos = {
-    "IOS": "example.mp4",
+retained_source_videos = {
     "multi": "emample.mp4",
-    "software": "example.mp4",
     "website": "example.mp4",
+}
+official_video_sha256 = {
+    "android": (
+        "f61e0276b918d67c8e600fdda46a69865d78efca100a27fc97d166eea4eaecc7"
+    ),
+    "ios": (
+        "fe8f47964ec829de7a3813b9be7cd3a33644d8087851a33f6163b40276b7ec94"
+    ),
+    "software": (
+        "1fe44ee2fdf57bc5876fdd89d93b8df2860da135bee9c55f0e45f9737a7753d1"
+    ),
+    "xr": (
+        "ce48735a6bdb3d0df92cd9796cbad0330a48fd6451bd5610610c1e2d51b60ce8"
+    ),
 }
 
 
 def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    value = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            value.update(chunk)
+    return value.hexdigest()
 
 
 def fail(message):
@@ -772,16 +804,20 @@ for source_name, destination_name in mapping.items():
     if source_annotation != destination_annotation:
         fail(f"Annotation mismatch: {source} -> {destination}")
 
-    if source_name in source_videos:
-        source_video = source / source_videos[source_name]
+    if source_name in retained_source_videos:
+        source_video = source / retained_source_videos[source_name]
         destination_video = destination / "example.mp4"
         if digest(source_video) != digest(destination_video):
             fail(f"Video mismatch: {source_video} -> {destination_video}")
-    else:
-        if list(source.glob("*.mp4")):
-            fail(f"Unexpected submitted video: {source}")
-        if not (destination / "example.mp4").is_file():
-            fail(f"Missing recovered video: {destination / 'example.mp4'}")
+
+for scenario, expected in official_video_sha256.items():
+    video = destination_root / scenario / "example.mp4"
+    actual = digest(video)
+    if actual != expected:
+        fail(
+            f"Official video mismatch: {video}; "
+            f"expected {expected}, got {actual}"
+        )
 
 print("Case-study semantic comparison passed")
 PY
