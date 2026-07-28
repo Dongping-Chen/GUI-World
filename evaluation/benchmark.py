@@ -15,6 +15,7 @@ from evaluation.frames import (
 )
 from evaluation.jsonl import (
     JsonlError,
+    _report_cleanup_failure,
     atomic_write_jsonl,
     read_jsonl,
     record_id,
@@ -94,29 +95,42 @@ def _preflight_output(path: Path) -> None:
         )
 
     temporary_path: Path | None = None
+    primary_error: BaseException | None = None
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="wb",
-            prefix=f".{path.name}.",
-            suffix=".tmp",
-            dir=parent,
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-    except OSError as error:
-        raise BenchmarkError(
-            f"Could not create an atomic temporary output file in "
-            f"{parent}: {error}"
-        ) from error
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                dir=parent,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+        except OSError as error:
+            raise BenchmarkError(
+                f"Could not create an atomic temporary output file in "
+                f"{parent}: {error}"
+            ) from error
+    except BaseException as error:
+        primary_error = error
+        raise
     finally:
         if temporary_path is not None:
             try:
                 temporary_path.unlink()
             except OSError as error:
-                raise BenchmarkError(
-                    f"Could not remove output preflight file "
-                    f"{temporary_path}: {error}"
-                ) from error
+                if primary_error is not None:
+                    _report_cleanup_failure(
+                        primary_error,
+                        f"Output preflight cleanup failed ({error}) for "
+                        f"{temporary_path} while handling "
+                        f"{type(primary_error).__name__}.",
+                    )
+                else:
+                    raise BenchmarkError(
+                        f"Could not remove output preflight file "
+                        f"{temporary_path}: {error}"
+                    ) from error
 
 
 def _successful_task(value, current_task: dict) -> bool:

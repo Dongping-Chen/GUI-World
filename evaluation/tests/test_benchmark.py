@@ -4,6 +4,7 @@ import argparse
 import copy
 import json
 import tempfile
+import warnings
 from pathlib import Path
 
 import cv2
@@ -531,6 +532,80 @@ def test_output_preflight_temp_creation_failure_precedes_paid_calls(
     assert extraction_calls == []
     assert provider.calls == []
     assert not (tmp_path / "output.jsonl").exists()
+
+
+@pytest.mark.parametrize("warnings_as_errors", [False, True])
+def test_output_preflight_cleanup_does_not_mask_primary_close_failure(
+    tmp_path,
+    benchmark_record,
+    monkeypatch,
+    warnings_as_errors,
+):
+    from evaluation.benchmark import BenchmarkError, run_benchmark
+
+    record = _record(benchmark_record, "one", "one.mp4")
+    input_path = _write_jsonl(tmp_path / "input.jsonl", [record])
+    (tmp_path / "one.mp4").touch()
+    temporary_path = tmp_path / ".output.jsonl.preflight.tmp"
+    provider = FakeProvider()
+    extraction_calls = []
+
+    class CloseFailure:
+        name = str(temporary_path)
+
+        def __enter__(self):
+            temporary_path.touch()
+            return self
+
+        def __exit__(self, error_type, error, traceback):
+            raise OSError("primary probe close failure")
+
+    def fail_unlink(path):
+        raise OSError("secondary probe cleanup failure")
+
+    monkeypatch.setattr(
+        tempfile,
+        "NamedTemporaryFile",
+        lambda **kwargs: CloseFailure(),
+    )
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+
+    def invoke():
+        return run_benchmark(
+            input_path,
+            tmp_path / "output.jsonl",
+            provider,
+            "website",
+            "linspace",
+            video_root=tmp_path,
+            frame_extractor=_fake_extractor(extraction_calls),
+        )
+
+    if warnings_as_errors:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RuntimeWarning)
+            with pytest.raises(
+                BenchmarkError,
+                match="primary probe close failure",
+            ) as raised:
+                invoke()
+    else:
+        with pytest.warns(
+            RuntimeWarning,
+            match="secondary probe cleanup failure",
+        ):
+            with pytest.raises(
+                BenchmarkError,
+                match="primary probe close failure",
+            ) as raised:
+                invoke()
+
+    assert any(
+        "secondary probe cleanup failure" in detail
+        for detail in raised.value.cleanup_errors
+    )
+    assert extraction_calls == []
+    assert provider.calls == []
 
 
 def test_output_preflight_probe_leaves_no_file_before_extraction(
