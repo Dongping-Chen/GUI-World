@@ -37,6 +37,18 @@ hf download ONE-Lab/GUI-World \
   --local-dir GUI-World-data
 ```
 
+The full dataset contains all six video collections and can require substantial
+download time and disk space. To download only the iOS benchmark annotation and
+videos, repeat `--include` for each glob:
+
+```bash
+hf download ONE-Lab/GUI-World \
+  --repo-type dataset \
+  --include 'Annotation/benchmark/IOS.jsonl' \
+  --include 'IOS/**' \
+  --local-dir GUI-World-data
+```
+
 Benchmark annotations are located at:
 
 ```text
@@ -171,6 +183,11 @@ python -m evaluation.benchmark \
   --resume
 ```
 
+JSONL records do not store the provider, model ID, scenario, frame strategy, or
+other run metadata, and resume does not verify those settings. The automatic
+filename is only a label, not configuration validation. Use a new `--output`
+path instead of `--resume` whenever any run setting changes.
+
 ## Judge benchmark results
 
 The judge reads benchmark result JSONL rather than the source annotations:
@@ -201,6 +218,10 @@ llm_judge_<provider>_<input-stem>_<start>_<end>.jsonl
 
 As with benchmark inference, pass `--output` for an explicit path. Without
 `--resume`, an existing output causes an error.
+
+Judged JSONL records likewise do not store the judge provider, model ID, or
+other run metadata, and resume does not verify those settings. Changing the
+judge configuration requires a new output path.
 
 ## Canonical names and legacy aliases
 

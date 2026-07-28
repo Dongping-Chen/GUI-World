@@ -182,16 +182,11 @@ Expected: every `diff` is empty and the final `test` exits 0.
 
 - [ ] **Step 4: Select the six verified videos**
 
-Retain only the submitted multi and website videos. Download the four official
-scenario videos individually, with redirects and bounded retries:
+Retain the staged Android, iOS, multi, and website videos after byte-for-byte
+verification. Download the two required official scenario videos individually,
+with redirects and bounded retries:
 
 ```bash
-curl -L --fail --retry 5 \
-  https://huggingface.co/datasets/ONE-Lab/GUI-World/resolve/main/android/58.mp4 \
-  -o case_studies/android/example.mp4
-curl -L --fail --retry 5 \
-  https://huggingface.co/datasets/ONE-Lab/GUI-World/resolve/main/IOS/176.mp4 \
-  -o case_studies/ios/example.mp4
 curl -L --fail --retry 5 \
   https://huggingface.co/datasets/ONE-Lab/GUI-World/resolve/main/software/172.mp4 \
   -o case_studies/software/example.mp4
@@ -200,18 +195,18 @@ curl -L --fail --retry 5 \
   -o case_studies/xr/example.mp4
 ```
 
-Android and XR do not have usable submitted source videos. The submitted
-software video is byte-identical to official `XR/151.mp4`, rather than the
-software annotation. The submitted iOS video does not align with its annotated
-PNG frames. Therefore `software/172.mp4` and `IOS/176.mp4` replace those two
-submitted videos as well.
+The staged software video is byte-identical to official `XR/151.mp4`, rather
+than the intended software video, so `software/172.mp4` replaces it. The staged
+XR directory contains no video, so `XR/151.mp4` restores it. The retained
+Android and iOS videos correspond to official `android/58.mp4` and
+`IOS/176.mp4`.
 
 Extend the asset test to decode every annotated frame from all six example
 videos. Require the decoded frame and retained PNG to have equal dimensions and
 a grayscale normalized correlation of at least `0.95`. This automated
 all-frame similarity check verifies the complete video selection, not just file
-presence or dimensions. Visually inspect at least one frame from each of the
-four official replacements as an additional check.
+presence or dimensions. Visually inspect at least one frame from the software
+replacement and the restored XR video as an additional check.
 
 - [ ] **Step 5: Run the asset test**
 
@@ -724,10 +719,12 @@ Run a read-only semantic comparison that:
 - compares SHA-256 for every PNG;
 - removes only top-level `video_path` from both parsed annotation dictionaries
   and asserts the remaining structures are equal;
-- compares the submitted and destination video hashes only for multi and
+- compares staged and destination video hashes for Android, iOS, multi, and
   website, accounting for the corrected `multi/example.mp4` name;
-- checks the four official Android, iOS, software, and XR videos against fixed
-  SHA-256 values captured from the verified migration;
+- proves the staged software video is the XR video rather than the destination
+  software video, and proves the staged XR directory has no video;
+- checks all six destination videos against fixed SHA-256 values captured from
+  the verified migration;
 - reruns the all-keyframe alignment test for every case study.
 
 The command must exit nonzero on the first mismatch and print the mismatched
@@ -752,19 +749,27 @@ mapping = {
     "website": "website",
     "XR": "xr",
 }
-retained_source_videos = {
+source_videos = {
+    "android": "example.mp4",
+    "IOS": "example.mp4",
     "multi": "emample.mp4",
     "website": "example.mp4",
 }
-official_video_sha256 = {
+destination_video_sha256 = {
     "android": (
         "f61e0276b918d67c8e600fdda46a69865d78efca100a27fc97d166eea4eaecc7"
     ),
     "ios": (
         "fe8f47964ec829de7a3813b9be7cd3a33644d8087851a33f6163b40276b7ec94"
     ),
+    "multi": (
+        "35de2ee686c1196553f45686937f77c2b6b584d438f85f0d663547b465fcefad"
+    ),
     "software": (
         "1fe44ee2fdf57bc5876fdd89d93b8df2860da135bee9c55f0e45f9737a7753d1"
+    ),
+    "website": (
+        "3a4c56c3dbffdc777cd30710f0428cc08271e2ce6c1e8d73318acf74af3861c5"
     ),
     "xr": (
         "ce48735a6bdb3d0df92cd9796cbad0330a48fd6451bd5610610c1e2d51b60ce8"
@@ -804,13 +809,24 @@ for source_name, destination_name in mapping.items():
     if source_annotation != destination_annotation:
         fail(f"Annotation mismatch: {source} -> {destination}")
 
-    if source_name in retained_source_videos:
-        source_video = source / retained_source_videos[source_name]
+    if source_name in source_videos:
+        source_video = source / source_videos[source_name]
         destination_video = destination / "example.mp4"
         if digest(source_video) != digest(destination_video):
             fail(f"Video mismatch: {source_video} -> {destination_video}")
 
-for scenario, expected in official_video_sha256.items():
+software_source = source_root / "software" / "example.mp4"
+software_destination = destination_root / "software" / "example.mp4"
+if digest(software_source) == digest(software_destination):
+    fail("Staged software video unexpectedly matches destination software")
+if digest(software_source) != destination_video_sha256["xr"]:
+    fail("Staged software video is not the known XR/151.mp4 video")
+
+xr_source_videos = list((source_root / "XR").glob("*.mp4"))
+if xr_source_videos:
+    fail(f"Unexpected staged XR video: {xr_source_videos[0]}")
+
+for scenario, expected in destination_video_sha256.items():
     video = destination_root / scenario / "example.mp4"
     actual = digest(video)
     if actual != expected:

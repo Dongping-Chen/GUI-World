@@ -45,16 +45,15 @@ Scenario directory names are normalized to lowercase. Each directory retains
 its `annotation.json`, example video, and extracted frame images. The misspelled
 `multi/emample.mp4` filename becomes `multi/example.mp4`.
 
-Four case-study videos come from the canonical GUI-World Hugging Face dataset:
-`android/58.mp4`, `IOS/176.mp4`, `software/172.mp4`, and `XR/151.mp4`. Android
-and XR require missing source videos to be restored. The submitted software
-video is actually identical to `XR/151.mp4`, and the submitted iOS video does
-not align with its annotated PNG frames, so both are replaced with their
-scenario's official videos as well. Only the submitted multi and website videos
-are retained. All submitted PNGs and annotation content are preserved, and
-every annotated frame is decoded from the selected video and checked for
-alignment in the asset test. Every copied annotation replaces its stale
-machine-specific `video_path` with the relative value `example.mp4`.
+The staged Android, iOS, multi, and website videos are retained after
+byte-for-byte comparison with their destinations. The staged software video is
+actually identical to official `XR/151.mp4`, so it is replaced with official
+`software/172.mp4`. The staged XR directory has no video, so official
+`XR/151.mp4` is restored. The final Android and iOS videos correspond to
+`android/58.mp4` and `IOS/176.mp4`. All submitted PNGs and annotation content
+are preserved, and every annotated frame is decoded from the selected video
+and checked for alignment in the asset test. Every copied annotation replaces
+its stale machine-specific `video_path` with the relative value `example.mp4`.
 
 Evaluation code becomes an importable top-level `evaluation/` package:
 
